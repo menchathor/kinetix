@@ -42,12 +42,12 @@ export const INITIAL_DATA = {
         {
           id: "cable_row",
           name: "Remo Sentado en Polea / Máquina",
-          machineName: "Seated Cable Row / Chest Supported Row",
+          machineName: "Remo / Seated Cable Row / Chest Supported Row",
           targetMuscles: "Dorsal Ancho, Romboides, Trapecio Medio, Bíceps",
           image: "assets/images/smartfit_back_machine_1789138318602.jpg",
           defaultSets: 4,
           defaultReps: "10",
-          baseWeight: "Pendiente",
+          baseWeight: "33",
           seatAdjustment: "Pecho apoyado en cojín o pies firmes en la plataforma con rodillas semiflexionadas.",
           tips: [
             "Espalda erguida, pecho hacia afuera, sin balancear el torso.",
@@ -73,13 +73,13 @@ export const INITIAL_DATA = {
         },
         {
           id: "lat_pulldown",
-          name: "Jalón al Pecho en Polea Alta",
-          machineName: "Lat Pulldown Machine / Cable Tower",
+          name: "Tracción Lateral Superior (Jalón al Pecho)",
+          machineName: "Tracción Lateral Superior / Lat Pulldown",
           targetMuscles: "Dorsal Ancho, Redondo Mayor, Bíceps",
           image: "assets/images/smartfit_back_machine_1789138318602.jpg",
           defaultSets: 3,
           defaultReps: "10",
-          baseWeight: "Pendiente",
+          baseWeight: "47",
           seatAdjustment: "Ajustar la almohadilla superior sobre los muslos para quedar totalmente anclado.",
           tips: [
             "Agarre prono un poco más ancho que los hombros.",
@@ -164,13 +164,13 @@ export const INITIAL_DATA = {
         },
         {
           id: "leg_curl",
-          name: "Curl Femoral (Contracción de Piernas)",
-          machineName: "Seated / Lying Leg Curl",
+          name: "Contracción de Pierna (Curl Femoral)",
+          machineName: "Contracción de Pierna / Leg Curl",
           targetMuscles: "Isquiosurales (Bíceps Femoral, Semitendinoso)",
           image: "assets/images/smartfit_leg_extension_1789138265921.jpg",
           defaultSets: 4,
           defaultReps: "10-12",
-          baseWeight: "40",
+          baseWeight: "46",
           seatAdjustment: "Rodillo colocado justo detrás de los tobillos (sobre el tendón de Aquiles).",
           tips: [
             "Flexionar llevando los talones hacia los glúteos de forma decidida.",
@@ -220,13 +220,13 @@ export const INITIAL_DATA = {
       exercises: [
         {
           id: "lat_pulldown_neutral",
-          name: "Jalón al Pecho Agarre Neutro / Cerrado",
-          machineName: "Lat Pulldown con agarre triángulo o neutro",
+          name: "Tracción Dorsal Fija (Jalón Neutro / Cerrado)",
+          machineName: "Tracción Dorsal Fija / Lat Pulldown Neutro",
           targetMuscles: "Dorsal Ancho (fibras bajas), Braquial",
           image: "assets/images/smartfit_back_machine_1789138318602.jpg",
           defaultSets: 4,
           defaultReps: "8-10",
-          baseWeight: "Pendiente",
+          baseWeight: "40",
           seatAdjustment: "Almohadilla sobre los muslos, torso firme.",
           tips: [
             "El agarre neutro permite un mayor recorrido hacia las costillas y protege las muñecas.",
@@ -252,12 +252,12 @@ export const INITIAL_DATA = {
         {
           id: "machine_row_supported",
           name: "Remo en Máquina con Soporte en Pecho",
-          machineName: "Chest-Supported Machine Row",
+          machineName: "Remo / Chest-Supported Machine Row",
           targetMuscles: "Romboides, Trapecio Medio, Dorsal",
           image: "assets/images/smartfit_back_machine_1789138318602.jpg",
           defaultSets: 3,
           defaultReps: "10-12",
-          baseWeight: "Pendiente",
+          baseWeight: "33",
           seatAdjustment: "Cojín del pecho colocado de modo que los brazos lleguen cómodos a las manillas.",
           tips: [
             "Tener el pecho apoyado elimina toda carga o molestia en la zona lumbar.",
@@ -321,13 +321,13 @@ export const INITIAL_DATA = {
       exercises: [
         {
           id: "hip_thrust_machine",
-          name: "Hip Thrust en Máquina o Multipower",
-          machineName: "Hip Thrust Machine / Smith Machine",
+          name: "Hip & Glute (Hip Thrust en Máquina)",
+          machineName: "Hip & Glute Machine / Hip Thrust",
           targetMuscles: "Glúteo Mayor, Isquiosurales",
           image: "assets/images/smartfit_leg_press_1789138185290.jpg",
           defaultSets: 4,
           defaultReps: "10-12",
-          baseWeight: "Auto",
+          baseWeight: "89",
           seatAdjustment: "Cojín acolchado justo sobre la pelvis/caderas.",
           tips: [
             "Pies apoyados de modo que al subir las rodillas formen 90°.",
@@ -352,13 +352,13 @@ export const INITIAL_DATA = {
         },
         {
           id: "leg_curl_p2",
-          name: "Curl Femoral en Máquina",
-          machineName: "Seated or Lying Leg Curl",
+          name: "Contracción de Pierna (Curl Femoral)",
+          machineName: "Contracción de Pierna / Leg Curl",
           targetMuscles: "Isquiosurales",
           image: "assets/images/smartfit_leg_extension_1789138265921.jpg",
           defaultSets: 3,
           defaultReps: "10-12",
-          baseWeight: "40",
+          baseWeight: "46",
           seatAdjustment: "Rodillo detrás del tendón de Aquiles.",
           tips: [
             "Concentración máxima en flexionar y retener 2 segundos la vuelta."

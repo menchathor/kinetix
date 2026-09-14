@@ -33,27 +33,54 @@ export class StorageService {
       };
       localStorage.setItem(KEYS.SETTINGS, JSON.stringify(defaultSettings));
     }
-    // Inicializar logs de entrenamiento si no existen
-    if (!localStorage.getItem(KEYS.WORKOUT_LOGS)) {
-      // Registro inicial de calibración con las marcas que Michael ya tomó
-      const baselineSession = {
-        id: 'session_baseline_20260910',
-        date: '2026-09-10T18:30:00',
-        routineId: 'calibracion_inicial',
-        routineName: 'Calibración de Pesos Base',
-        notes: 'Primera sesión de calibración de máquinas en Smart Fit (8-10 reps)',
-        exercises: [
-          { exerciseId: 'chest_press', exerciseName: 'Press Pecho Máquina', sets: [{ setNumber: 1, weight: 40, reps: 10, completed: true }] },
-          { exerciseId: 'pec_deck', exerciseName: 'Mariposa Pectoral (Pec Deck)', sets: [{ setNumber: 1, weight: 47, reps: 10, completed: true }] },
-          { exerciseId: 'shoulder_press', exerciseName: 'Press Hombro Máquina', sets: [{ setNumber: 1, weight: 25, reps: 10, completed: true }] },
-          { exerciseId: 'leg_press', exerciseName: 'Prensa de Piernas', sets: [{ setNumber: 1, weight: 75, reps: 10, completed: true }] },
-          { exerciseId: 'leg_extension', exerciseName: 'Extensión Pierna', sets: [{ setNumber: 1, weight: 47, reps: 10, completed: true }] },
-          { exerciseId: 'leg_curl', exerciseName: 'Curl Femoral (Contracción)', sets: [{ setNumber: 1, weight: 40, reps: 10, completed: true }] },
-          { exerciseId: 'biceps_cable_curl', exerciseName: 'Bíceps Polea Baja', sets: [{ setNumber: 1, weight: 21, reps: 10, completed: true }] },
-          { exerciseId: 'triceps_pushdown', exerciseName: 'Tríceps Polea Alta', sets: [{ setNumber: 1, weight: 18, reps: 10, completed: true }] }
-        ]
-      };
+    // Registro inicial de calibración con las marcas que Michael ya tomó
+    const baselineSession = {
+      id: 'session_baseline_20260910',
+      date: '2026-09-10T18:30:00',
+      routineId: 'calibracion_inicial',
+      routineName: 'Calibración de Pesos Base',
+      notes: 'Sesión de calibración de máquinas en Smart Fit (8-10 reps)',
+      exercises: [
+        { exerciseId: 'chest_press', exerciseName: 'Press Pecho Máquina', sets: [{ setNumber: 1, weight: 40, reps: 10, completed: true }] },
+        { exerciseId: 'pec_deck', exerciseName: 'Mariposa Pectoral (Pec Deck)', sets: [{ setNumber: 1, weight: 47, reps: 10, completed: true }] },
+        { exerciseId: 'shoulder_press', exerciseName: 'Press Hombro Máquina', sets: [{ setNumber: 1, weight: 25, reps: 10, completed: true }] },
+        { exerciseId: 'lat_pulldown', exerciseName: 'Tracción Lateral Superior', sets: [{ setNumber: 1, weight: 47, reps: 10, completed: true }] },
+        { exerciseId: 'lat_pulldown_neutral', exerciseName: 'Tracción Dorsal Fija', sets: [{ setNumber: 1, weight: 40, reps: 10, completed: true }] },
+        { exerciseId: 'cable_row', exerciseName: 'Remo Sentado', sets: [{ setNumber: 1, weight: 33, reps: 10, completed: true }] },
+        { exerciseId: 'machine_row_supported', exerciseName: 'Remo con Soporte', sets: [{ setNumber: 1, weight: 33, reps: 10, completed: true }] },
+        { exerciseId: 'leg_press', exerciseName: 'Prensa de Piernas', sets: [{ setNumber: 1, weight: 75, reps: 10, completed: true }] },
+        { exerciseId: 'leg_extension', exerciseName: 'Extensión Pierna', sets: [{ setNumber: 1, weight: 47, reps: 10, completed: true }] },
+        { exerciseId: 'leg_curl', exerciseName: 'Contracción Pierna', sets: [{ setNumber: 1, weight: 46, reps: 10, completed: true }] },
+        { exerciseId: 'leg_curl_p2', exerciseName: 'Contracción Pierna P2', sets: [{ setNumber: 1, weight: 46, reps: 10, completed: true }] },
+        { exerciseId: 'hip_thrust_machine', exerciseName: 'Hip & Glute', sets: [{ setNumber: 1, weight: 89, reps: 10, completed: true }] },
+        { exerciseId: 'biceps_cable_curl', exerciseName: 'Bíceps Polea Baja', sets: [{ setNumber: 1, weight: 21, reps: 10, completed: true }] },
+        { exerciseId: 'triceps_pushdown', exerciseName: 'Tríceps Polea Alta', sets: [{ setNumber: 1, weight: 18, reps: 10, completed: true }] }
+      ]
+    };
+
+    // Inicializar o actualizar logs de entrenamiento en localStorage
+    let logs = [];
+    try {
+      logs = JSON.parse(localStorage.getItem(KEYS.WORKOUT_LOGS)) || [];
+    } catch {
+      logs = [];
+    }
+
+    if (logs.length === 0) {
       localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify([baselineSession]));
+    } else {
+      const baseIdx = logs.findIndex(l => l.id === 'session_baseline_20260910');
+      if (baseIdx >= 0) {
+        baselineSession.exercises.forEach(newEx => {
+          const existingEx = logs[baseIdx].exercises.find(e => e.exerciseId === newEx.exerciseId);
+          if (!existingEx) {
+            logs[baseIdx].exercises.push(newEx);
+          } else if (newEx.exerciseId === 'leg_curl' || newEx.exerciseId === 'leg_curl_p2') {
+            existingEx.sets[0].weight = 46;
+          }
+        });
+        localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
+      }
     }
   }
 

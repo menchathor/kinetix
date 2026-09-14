@@ -61,14 +61,18 @@ export function renderAnalyticsModule(container) {
             <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones sesión a sesión</p>
           </div>
           <select id="selectExerciseForChart" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium">
-            <option value="chest_press">Press Pecho Máquina</option>
-            <option value="pec_deck">Mariposa Pectoral (Pec Deck)</option>
-            <option value="shoulder_press">Press Hombro Máquina</option>
-            <option value="leg_press">Prensa de Piernas (Leg Press)</option>
-            <option value="leg_extension">Extensión Piernas</option>
-            <option value="leg_curl">Curl Femoral (Contracción)</option>
-            <option value="biceps_cable_curl">Bíceps Polea Baja</option>
-            <option value="triceps_pushdown">Tríceps Polea Alta</option>
+            <option value="chest_press">Press Pecho Máquina (40)</option>
+            <option value="pec_deck">Mariposa Pectoral (Pec Deck) (47)</option>
+            <option value="lat_pulldown">Tracción Lateral Superior / Jalón (47)</option>
+            <option value="lat_pulldown_neutral">Tracción Dorsal Fija (40)</option>
+            <option value="cable_row">Remo Sentado / Soporte (33)</option>
+            <option value="shoulder_press">Press Hombro Máquina (25)</option>
+            <option value="leg_press">Prensa de Piernas (75)</option>
+            <option value="leg_extension">Extensión Piernas (47)</option>
+            <option value="leg_curl">Contracción Piernas / Curl (46)</option>
+            <option value="hip_thrust_machine">Hip & Glute (89)</option>
+            <option value="biceps_cable_curl">Bíceps Polea Baja (21)</option>
+            <option value="triceps_pushdown">Tríceps Polea Alta (18)</option>
           </select>
         </div>
         <div class="h-56 relative">
