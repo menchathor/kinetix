@@ -1,6 +1,6 @@
-# Smart Fit Tracker • Michael Meneses Mora
+# Kinetix • Michael Meneses Mora
 
-Aplicación web progresiva (**PWA**) modular y *Mobile-First* para el seguimiento del entrenamiento en Smart Fit, registro de sobrecarga progresiva, temporizador de descanso, plan nutricional clínico (hipotiroidismo medicado) y analíticas de evolución corporal.
+Aplicación web progresiva (**PWA**) modular y *Mobile-First* para el seguimiento del entrenamiento de fuerza en máquinas, registro de sobrecarga progresiva, temporizador de descanso, plan nutricional clínico (hipotiroidismo medicado) y analíticas de evolución corporal.
 
 ---
 
@@ -27,9 +27,10 @@ Aplicación web progresiva (**PWA**) modular y *Mobile-First* para el seguimient
    - Gráfica de evolución de peso y grasa visceral hacia la meta de recomposición (72 - 74 kg).
    - Gráfica de sobrecarga progresiva por máquina.
    - Modal para registrar nuevas mediciones de peso y contorno de cintura (cm).
+   - Paleta dinámica con soporte de **Modo Claro** y **Modo Oscuro**.
 
 5. **Modo Local-First & Conector Cloud:**
-   - Funciona 100% offline dentro de Smart Fit con Service Worker.
+   - Funciona 100% offline en el gimnasio con Service Worker.
    - Conector listo para sincronizar con **Supabase** o **Firebase** en la pestaña de Ajustes.
    - Descarga y restauración de copias de seguridad en formato `.json`.
 
@@ -53,18 +54,18 @@ Para instalarla en tu teléfono:
 Para acceder desde cualquier lugar del mundo sin estar en el mismo Wi-Fi:
 
 1. **Crea un repositorio nuevo en GitHub** (público o privado):
-   - Por ejemplo, nómbralo: `smartfit-tracker`
+   - Por ejemplo, nómbralo: `kinetix-app`
 2. **Conecta y sube el código:**
    ```powershell
    git init
    git add .
-   git commit -m "feat: initial commit Smart Fit Tracker PWA"
+   git commit -m "feat: Kinetix PWA release v1.1"
    git branch -M main
-   git remote add origin https://github.com/TU_USUARIO/smartfit-tracker.git
+   git remote add origin https://github.com/TU_USUARIO/kinetix-app.git
    git push -u origin main
    ```
 3. **Activar GitHub Pages:**
    - En tu repositorio de GitHub, ve a **Settings** > **Pages**.
    - En *Build and deployment > Source*, selecciona **Deploy from a branch**.
    - Selecciona la rama `main` y la carpeta `/ (root)`, luego pulsa **Save**.
-   - En 1 minuto tendrás tu enlace HTTPS público: `https://TU_USUARIO.github.io/smartfit-tracker/`
+   - En 1 minuto tendrás tu enlace HTTPS público: `https://TU_USUARIO.github.io/kinetix-app/`

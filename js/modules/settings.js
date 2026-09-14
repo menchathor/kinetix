@@ -123,8 +123,8 @@ export function renderSettingsModule(container) {
 
       <!-- INFO DE LA APLICACIÓN -->
       <div class="p-4 rounded-2xl bg-[var(--accent)]/30 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
-        <p class="font-bold text-[var(--foreground)]">Smart Fit Tracker v1.0 (PWA)</p>
-        <p>Diseñada a la medida para Michael Meneses • Smart Fit 18:00 hrs</p>
+        <p class="font-bold text-[var(--foreground)]">Kinetix v1.1 (PWA)</p>
+        <p>Diseñada a la medida para Michael Meneses • 18:00 hrs</p>
         <p class="text-[11px] opacity-75">Soporte offline completo con Service Worker y Web Cache.</p>
       </div>
 

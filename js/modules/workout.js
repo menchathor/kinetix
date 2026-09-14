@@ -38,8 +38,8 @@ export function renderWorkoutModule(container) {
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
               </span>
               <div>
-                <h3 class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${state.activeWorkout.routineName}</h3>
-                <p class="text-xs text-[var(--muted-foreground)]">${routine.dayName} • Smart Fit 18:00 hrs</p>
+                <h3 class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${routine.title}</h3>
+                <p class="text-xs text-[var(--muted-foreground)]">${routine.dayName} • Sesión 18:00 hrs</p>
               </div>
             </div>
             <div class="flex gap-2">

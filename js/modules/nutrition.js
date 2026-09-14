@@ -113,7 +113,7 @@ export function renderNutritionModule(container) {
       <!-- DESGLOSE DE COMIDAS DEL PLAN V1 -->
       <div class="space-y-3">
         <h3 class="text-xs uppercase font-bold tracking-wider text-[var(--muted-foreground)] px-1">
-          Estructura de Comidas (Alineada a Smart Fit 18:00 hrs)
+          Estructura de Comidas (Alineada al Entrenamiento 18:00 hrs)
         </h3>
 
         ${nutritionData.meals.map(meal => {

@@ -1,5 +1,5 @@
-// Service Worker para Smart Fit Tracker (Cache & Offline Support)
-const CACHE_NAME = 'smartfit-v1.0';
+// Service Worker para Kinetix PWA (Cache & Offline Support)
+const CACHE_NAME = 'kinetix-v1.1';
 
 const ASSETS_TO_CACHE = [
   './',

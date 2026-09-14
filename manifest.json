@@ -1,7 +1,7 @@
 {
-  "name": "Smart Fit Tracker • Michael Meneses",
-  "short_name": "SmartFit",
-  "description": "Plan y registro de entrenamiento de máquinas, nutrición y evolución",
+  "name": "Kinetix • Recomposición & Salud",
+  "short_name": "Kinetix",
+  "description": "Entrenamiento de fuerza en máquinas, plan nutricional clínico y evolución corporal",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -22,9 +22,9 @@
       "purpose": "any"
     },
     {
-      "src": "./assets/icons/icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ]
