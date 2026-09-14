@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Smart Fit Tracker • Michael Meneses</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#090d16">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SmartFit">
+  <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg">
+  <link rel="apple-touch-icon" href="./assets/icons/icon.svg">
+
+  <!-- Tailwind CSS & Chart.js -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --background: #090d16;
+      --card: #111827;
+      --border: #1f2937;
+      --accent: #1e293b;
+      --foreground: #f8fafc;
+      --muted-foreground: #94a3b8;
+      --primary: #f59e0b;
+      --primary-foreground: #020617;
+    }
+
+    body {
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    /* Safe area padding for iPhones with notch / home bar */
+    .safe-bottom {
+      padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#090d16] text-slate-100 flex flex-col antialiased">
+
+  <!-- TOP APP BAR -->
+  <header class="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-slate-800 px-4 py-3">
+    <div class="max-w-3xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <img src="./assets/icons/icon.svg" alt="SmartFit Logo" class="w-8 h-8 rounded-lg shadow-xs" />
+        <div>
+          <h1 class="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5">
+            Smart Fit Tracker <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">18:00</span>
+          </h1>
+          <p class="text-[10px] text-slate-400">Recomposición Corporal • 72-74 kg</p>
+        </div>
+      </div>
+
+      <!-- Avatar / Badge -->
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs">
+          MM
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN SCROLLABLE CONTENT (Montado dinámicamente por app.js) -->
+  <main id="mainContent" class="flex-1 p-4 pb-28 max-w-3xl mx-auto w-full">
+    <!-- Contenido SPA inyectado por JS -->
+  </main>
+
+  <!-- TEMPORIZADOR DE DESCANSO FLOTANTE -->
+  <div id="floatingTimer" class="hidden fixed bottom-20 right-4 z-50 bg-slate-900/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-3 shadow-2xl max-w-xs w-64 transition-all">
+    <div class="flex items-center justify-between mb-1.5">
+      <div class="flex items-center gap-1.5">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+        </span>
+        <span class="text-[11px] uppercase font-bold text-amber-400">Descanso</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700" title="Sumar 15 segundos">+15s</button>
+        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">⏸</button>
+        <button id="btnTimerClose" class="text-xs text-slate-400 hover:text-slate-200 pl-1">✕</button>
+      </div>
+    </div>
+
+    <!-- Contador Digital -->
+    <div class="text-center my-1">
+      <span id="timerTextDisplay" class="font-mono text-2xl font-black tracking-wider text-white">01:30</span>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+      <div id="timerProgressBar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300 rounded-full" style="width: 100%"></div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAVIGATION BAR (Sticky) -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-[#090d16]/95 backdrop-blur-lg border-t border-slate-800 safe-bottom">
+    <div class="max-w-md mx-auto grid grid-cols-4 px-2 py-1">
+      
+      <!-- Pestaña 1: Rutina / Entrenamiento -->
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-amber-500 transition-all" data-tab="workout">
+        <span class="nav-icon text-lg">🏋️</span>
+        <span class="nav-label text-[10px] font-bold mt-0.5">Rutina</span>
+      </button>
+
+      <!-- Pestaña 2: Nutrición -->
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="nutrition">
+        <span class="nav-icon text-lg">🥗</span>
+        <span class="nav-label text-[10px] mt-0.5">Nutrición</span>
+      </button>
+
+      <!-- Pestaña 3: Evolución -->
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="analytics">
+        <span class="nav-icon text-lg">📈</span>
+        <span class="nav-label text-[10px] mt-0.5">Evolución</span>
+      </button>
+
+      <!-- Pestaña 4: Ajustes -->
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="settings">
+        <span class="nav-icon text-lg">⚙️</span>
+        <span class="nav-label text-[10px] mt-0.5">Ajustes</span>
+      </button>
+
+    </div>
+  </nav>
+
+  <!-- Main JavaScript Module -->
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

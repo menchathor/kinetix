@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#1e293b" />
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+  <!-- Background with rounded corners -->
+  <rect width="512" height="512" rx="110" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="106" fill="none" stroke="url(#accentGrad)" stroke-width="8" opacity="0.3" />
+  
+  <!-- Dumbbell & Health Icon -->
+  <g transform="translate(106, 126)" fill="none" stroke="url(#accentGrad)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Barbell weights -->
+    <rect x="0" y="70" width="36" height="120" rx="12" fill="url(#accentGrad)" />
+    <rect x="44" y="90" width="24" height="80" rx="8" fill="url(#accentGrad)" />
+    
+    <rect x="264" y="70" width="36" height="120" rx="12" fill="url(#accentGrad)" />
+    <rect x="232" y="90" width="24" height="80" rx="8" fill="url(#accentGrad)" />
+    
+    <!-- Bar -->
+    <line x1="68" y1="130" x2="232" y2="130" stroke="#f59e0b" stroke-width="22" />
+    
+    <!-- Heartbeat Pulse Line -->
+    <path d="M70,130 L115,130 L135,75 L165,185 L185,130 L230,130" stroke="#ffffff" stroke-width="14" />
+  </g>
+
+  <!-- Text Badge -->
+  <text x="256" y="410" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="44" font-weight="900" fill="#f59e0b" letter-spacing="4">SMART FIT</text>
+</svg>
