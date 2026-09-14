@@ -201,6 +201,10 @@ function initWeightChart(measurements) {
   const canvas = document.getElementById('chartWeightTrend');
   if (!canvas || typeof Chart === 'undefined') return;
 
+  const isDark = document.documentElement.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
+  const textColor = isDark ? '#94a3b8' : '#64748b';
+
   const reversed = [...measurements].reverse();
   const labels = reversed.map(m => m.date.slice(5)); // MM-DD
   const dataWeights = reversed.map(m => m.weight);
@@ -242,15 +246,17 @@ function initWeightChart(measurements) {
         y: {
           min: 70,
           max: 88,
-          grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          grid: { color: gridColor },
+          ticks: { color: textColor }
         },
         x: {
-          grid: { display: false }
+          grid: { display: false },
+          ticks: { color: textColor }
         }
       },
       plugins: {
         legend: {
-          labels: { font: { size: 10 } }
+          labels: { color: textColor, font: { size: 10 } }
         }
       }
     }
@@ -316,22 +322,28 @@ function initExerciseChart(workoutLogs, exerciseId) {
           type: 'linear',
           display: true,
           position: 'left',
-          title: { display: true, text: 'Placa' },
-          grid: { color: 'rgba(255, 255, 255, 0.05)' }
+          title: { display: true, text: 'Placa', color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' },
+          grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)' },
+          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
         },
         y1: {
           type: 'linear',
           display: true,
           position: 'right',
-          title: { display: true, text: 'Reps' },
+          title: { display: true, text: 'Reps', color: '#10b981' },
           min: 0,
           max: 15,
-          grid: { display: false }
+          grid: { display: false },
+          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
         }
       },
       plugins: {
         legend: {
-          labels: { font: { size: 10 } }
+          labels: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b', font: { size: 10 } }
         }
       }
     }

@@ -10,7 +10,7 @@
   <meta name="theme-color" content="#090d16">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="SmartFit">
+  <meta name="apple-mobile-web-app-title" content="Tracker">
   <link rel="icon" type="image/svg+xml" href="./assets/icons/icon.svg">
   <link rel="apple-touch-icon" href="./assets/icons/icon.svg">
 
@@ -20,14 +20,31 @@
 
   <style>
     :root {
+      --background: #f8fafc;
+      --card: #ffffff;
+      --card-subtle: #f1f5f9;
+      --border: #e2e8f0;
+      --accent: #f1f5f9;
+      --foreground: #0f172a;
+      --muted-foreground: #64748b;
+      --primary: #f59e0b;
+      --primary-foreground: #020617;
+      --header-bg: rgba(248, 250, 252, 0.92);
+      --nav-bg: rgba(255, 255, 255, 0.95);
+    }
+
+    html.dark {
       --background: #090d16;
       --card: #111827;
+      --card-subtle: #1e293b;
       --border: #1f2937;
       --accent: #1e293b;
       --foreground: #f8fafc;
       --muted-foreground: #94a3b8;
       --primary: #f59e0b;
       --primary-foreground: #020617;
+      --header-bg: rgba(9, 13, 22, 0.90);
+      --nav-bg: rgba(9, 13, 22, 0.95);
     }
 
     body {
@@ -44,23 +61,26 @@
     }
   </style>
 </head>
-<body class="min-h-screen bg-[#090d16] text-slate-100 flex flex-col antialiased">
+<body class="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col antialiased transition-colors duration-200">
 
   <!-- TOP APP BAR -->
-  <header class="sticky top-0 z-40 bg-[#090d16]/90 backdrop-blur-md border-b border-slate-800 px-4 py-3">
+  <header class="sticky top-0 z-40 bg-[var(--header-bg)] backdrop-blur-md border-b border-[var(--border)] px-4 py-3 transition-colors duration-200">
     <div class="max-w-3xl mx-auto flex items-center justify-between">
       <div class="flex items-center gap-2.5">
-        <img src="./assets/icons/icon.svg" alt="SmartFit Logo" class="w-8 h-8 rounded-lg shadow-xs" />
+        <img src="./assets/icons/icon.svg" alt="App Logo" class="w-8 h-8 rounded-lg shadow-xs" />
         <div>
-          <h1 class="text-sm font-extrabold tracking-tight text-white flex items-center gap-1.5">
-            Smart Fit Tracker <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">18:00</span>
+          <h1 class="text-sm font-extrabold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
+            <span id="appTitleHeader">Smart Fit Tracker</span> <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
           </h1>
-          <p class="text-[10px] text-slate-400">Recomposición Corporal • 72-74 kg</p>
+          <p class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
         </div>
       </div>
 
-      <!-- Avatar / Badge -->
+      <!-- Action Buttons: Theme Toggle & Avatar -->
       <div class="flex items-center gap-2">
+        <button id="btnThemeToggle" class="w-8 h-8 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center text-sm shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro">
+          <span id="themeIcon">☀️</span>
+        </button>
         <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs">
           MM
         </div>
@@ -74,35 +94,35 @@
   </main>
 
   <!-- TEMPORIZADOR DE DESCANSO FLOTANTE -->
-  <div id="floatingTimer" class="hidden fixed bottom-20 right-4 z-50 bg-slate-900/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-3 shadow-2xl max-w-xs w-64 transition-all">
+  <div id="floatingTimer" class="hidden fixed bottom-20 right-4 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-3 shadow-2xl max-w-xs w-64 transition-all">
     <div class="flex items-center justify-between mb-1.5">
       <div class="flex items-center gap-1.5">
         <span class="relative flex h-2.5 w-2.5">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
           <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
         </span>
-        <span class="text-[11px] uppercase font-bold text-amber-400">Descanso</span>
+        <span class="text-[11px] uppercase font-bold text-amber-500">Descanso</span>
       </div>
       <div class="flex items-center gap-1">
-        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700" title="Sumar 15 segundos">+15s</button>
-        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-200 hover:bg-slate-700">⏸</button>
-        <button id="btnTimerClose" class="text-xs text-slate-400 hover:text-slate-200 pl-1">✕</button>
+        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos">+15s</button>
+        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]">⏸</button>
+        <button id="btnTimerClose" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] pl-1">✕</button>
       </div>
     </div>
 
     <!-- Contador Digital -->
     <div class="text-center my-1">
-      <span id="timerTextDisplay" class="font-mono text-2xl font-black tracking-wider text-white">01:30</span>
+      <span id="timerTextDisplay" class="font-mono text-2xl font-black tracking-wider text-[var(--foreground)]">01:30</span>
     </div>
 
     <!-- Barra de progreso -->
-    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+    <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden">
       <div id="timerProgressBar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-400 transition-all duration-300 rounded-full" style="width: 100%"></div>
     </div>
   </div>
 
   <!-- BOTTOM NAVIGATION BAR (Sticky) -->
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-[#090d16]/95 backdrop-blur-lg border-t border-slate-800 safe-bottom">
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-lg border-t border-[var(--border)] safe-bottom transition-colors duration-200">
     <div class="max-w-md mx-auto grid grid-cols-4 px-2 py-1">
       
       <!-- Pestaña 1: Rutina / Entrenamiento -->
@@ -112,19 +132,19 @@
       </button>
 
       <!-- Pestaña 2: Nutrición -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="nutrition">
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="nutrition">
         <span class="nav-icon text-lg">🥗</span>
         <span class="nav-label text-[10px] mt-0.5">Nutrición</span>
       </button>
 
       <!-- Pestaña 3: Evolución -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="analytics">
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="analytics">
         <span class="nav-icon text-lg">📈</span>
         <span class="nav-label text-[10px] mt-0.5">Evolución</span>
       </button>
 
       <!-- Pestaña 4: Ajustes -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-slate-400 transition-all" data-tab="settings">
+      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="settings">
         <span class="nav-icon text-lg">⚙️</span>
         <span class="nav-label text-[10px] mt-0.5">Ajustes</span>
       </button>

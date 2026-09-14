@@ -14,6 +14,9 @@ class App {
   }
 
   init() {
+    // Configurar Tema (Claro / Oscuro)
+    this.initTheme();
+
     // Suscribirse a cambios de estado global
     state.subscribe(() => {
       this.renderCurrentView();
@@ -37,6 +40,33 @@ class App {
 
     // Registrar Service Worker para soporte offline PWA
     this.registerServiceWorker();
+  }
+
+  initTheme() {
+    const savedTheme = localStorage.getItem('smartfit_theme') || 'dark';
+    const isDark = savedTheme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    this.updateThemeIcon(isDark);
+
+    const btnToggle = document.getElementById('btnThemeToggle');
+    if (btnToggle) {
+      btnToggle.addEventListener('click', () => {
+        const currentlyDark = document.documentElement.classList.contains('dark');
+        const nextDark = !currentlyDark;
+        document.documentElement.classList.toggle('dark', nextDark);
+        localStorage.setItem('smartfit_theme', nextDark ? 'dark' : 'light');
+        this.updateThemeIcon(nextDark);
+        // Refrescar vista actual para adaptar gráficas de Chart.js
+        this.renderCurrentView();
+      });
+    }
+  }
+
+  updateThemeIcon(isDark) {
+    const iconEl = document.getElementById('themeIcon');
+    if (iconEl) {
+      iconEl.textContent = isDark ? '☀️' : '🌙';
+    }
   }
 
   renderCurrentView() {

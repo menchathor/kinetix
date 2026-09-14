@@ -42,6 +42,25 @@ export function renderSettingsModule(container) {
         </div>
       </div>
 
+      <!-- APARIENCIA Y TEMA -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-base">🎨</span>
+          <h3 class="text-sm font-bold text-[var(--foreground)]">Apariencia y Modo Visual</h3>
+        </div>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+          Alterna entre modo oscuro (ideal para poca luz) y modo claro (máxima legibilidad diurna).
+        </p>
+
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)]">
+          <span class="text-xs font-semibold text-[var(--foreground)]">Tema de la interfaz:</span>
+          <select id="selectThemeSetting" class="text-xs py-1.5 px-3 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] font-medium outline-none">
+            <option value="dark" ${localStorage.getItem('smartfit_theme') !== 'light' ? 'selected' : ''}>🌙 Modo Oscuro (Predeterminado)</option>
+            <option value="light" ${localStorage.getItem('smartfit_theme') === 'light' ? 'selected' : ''}>☀️ Modo Claro</option>
+          </select>
+        </div>
+      </div>
+
       <!-- BASE DE DATOS Y SINCRONIZACIÓN CLOUD -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center gap-2 mb-1">
@@ -116,11 +135,22 @@ export function renderSettingsModule(container) {
 }
 
 function attachSettingsEvents(container, settings) {
+  const selectTheme = container.querySelector('#selectThemeSetting');
   const selectProvider = container.querySelector('#selectCloudProvider');
   const sectionSupabase = container.querySelector('#sectionSupabase');
   const btnSaveCloud = container.querySelector('#btnSaveCloudSettings');
   const btnExport = container.querySelector('#btnExportJSON');
   const fileImport = container.querySelector('#fileImportJSON');
+
+  if (selectTheme) {
+    selectTheme.addEventListener('change', (e) => {
+      const isDark = e.target.value === 'dark';
+      document.documentElement.classList.toggle('dark', isDark);
+      localStorage.setItem('smartfit_theme', e.target.value);
+      const iconEl = document.getElementById('themeIcon');
+      if (iconEl) iconEl.textContent = isDark ? '☀️' : '🌙';
+    });
+  }
 
   if (selectProvider) {
     selectProvider.addEventListener('change', (e) => {
