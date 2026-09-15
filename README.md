@@ -49,23 +49,12 @@ Para instalarla en tu teléfono:
 
 ---
 
-## 🌐 Despliegue en GitHub Pages (Paso a Paso)
+## 🌐 Enlace Oficial en Vivo (GitHub Pages)
 
-Para acceder desde cualquier lugar del mundo sin estar en el mismo Wi-Fi:
+La aplicación se encuentra publicada y disponible públicamente bajo **HTTPS seguro** en:
 
-1. **Crea un repositorio nuevo en GitHub** (público o privado):
-   - Por ejemplo, nómbralo: `kinetix-app`
-2. **Conecta y sube el código:**
-   ```powershell
-   git init
-   git add .
-   git commit -m "feat: Kinetix PWA release v1.1"
-   git branch -M main
-   git remote add origin https://github.com/TU_USUARIO/kinetix-app.git
-   git push -u origin main
-   ```
-3. **Activar GitHub Pages:**
-   - En tu repositorio de GitHub, ve a **Settings** > **Pages**.
-   - En *Build and deployment > Source*, selecciona **Deploy from a branch**.
-   - Selecciona la rama `main` y la carpeta `/ (root)`, luego pulsa **Save**.
-   - En 1 minuto tendrás tu enlace HTTPS público: `https://TU_USUARIO.github.io/kinetix-app/`
+👉 **[https://menchathor.github.io/kinetix/](https://menchathor.github.io/kinetix/)**
+
+* **En tu teléfono Android (Chrome):** Abre el enlace, pulsa los 3 puntos arriba a la derecha y selecciona **«Instalar aplicación»** (o acepta el banner flotante). Se instalará como app nativa a pantalla completa sin barras del navegador.
+* **En tu iPhone (Safari):** Abre el enlace, pulsa el botón Compartir y selecciona **«Agregar a pantalla de inicio»**.
+* **Repositorio de código:** [https://github.com/menchathor/kinetix](https://github.com/menchathor/kinetix)
