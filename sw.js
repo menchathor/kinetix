@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (Cache & Offline Support)
-const CACHE_NAME = 'kinetix-v1.3';
+const CACHE_NAME = 'kinetix-v1.4';
 
 const ASSETS_TO_CACHE = [
   './',

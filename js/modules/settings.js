@@ -125,7 +125,7 @@ export function renderSettingsModule(container) {
       <div class="p-4 rounded-2xl bg-[var(--accent)]/30 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-2">
         <div class="flex items-center justify-between">
           <div>
-            <p class="font-bold text-[var(--foreground)]">Kinetix v1.3 (PWA)</p>
+            <p class="font-bold text-[var(--foreground)]">Kinetix v1.4 (PWA)</p>
             <p class="text-[11px]">Diseñada a la medida para Michael Meneses • 18:00 hrs</p>
           </div>
           <button id="btnClearCacheReload" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 font-bold border border-amber-500/30 text-[11px] flex items-center gap-1 transition-colors">
