@@ -30,11 +30,12 @@ export function renderWorkoutModule(container, preserveScroll = false) {
     });
   }
 
-  const cardioDone = isLive ? !!state.activeWorkout.cardioDone : false;
-  const cardioMinutes = isLive ? (state.activeWorkout.cardioMinutes || 20) : 20;
   const totalExercises = routine.exercises.length;
   const completedCount = completedExercises.length;
   const progressPercent = isLive ? Math.round((completedCount / totalExercises) * 100) : 0;
+  const strengthCount = routine.exercises.filter(e => !e.isCardio).length;
+  const cardioItem = isLive ? state.activeWorkout.exercises.find(e => e.isCardio) : routine.exercises.find(e => e.isCardio);
+  const isCardioDone = isLive ? (cardioItem && cardioItem.sets && cardioItem.sets.every(s => s.completed)) : false;
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -83,10 +84,10 @@ export function renderWorkoutModule(container, preserveScroll = false) {
           <div class="mt-3 pt-2.5 border-t border-emerald-500/30">
             <div class="flex items-center justify-between text-[11px] mb-1">
               <span class="text-[var(--muted-foreground)]">
-                <b>${completedCount}</b> de <b>${totalExercises}</b> máquinas listas (${progressPercent}%)
+                <b>${completedCount}</b> de <b>${totalExercises}</b> actividades listas (${progressPercent}%)
               </span>
-              <span class="font-bold ${cardioDone ? 'text-emerald-400' : 'text-amber-500'}">
-                ${cardioDone ? '🏃 Cardio: ✓ Listo' : '🏃 Cardio: Pendiente'}
+              <span class="font-bold ${isCardioDone ? 'text-emerald-400' : 'text-amber-500'}">
+                ${isCardioDone ? '🏃 Cardio: ✓ Listo' : '🏃 Cardio: Pendiente'}
               </span>
             </div>
             <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden">
@@ -115,6 +116,24 @@ export function renderWorkoutModule(container, preserveScroll = false) {
             </button>
           ` : ''}
         </div>
+
+        <!-- Resumen del Programa Diario (Visible de inmediato al tope para no tener dudas) -->
+        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--border)]">
+          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] flex items-center gap-2.5">
+            <span class="text-lg">🏋️</span>
+            <div>
+              <span class="text-[10px] text-[var(--muted-foreground)] block">Fuerza en Máquinas</span>
+              <b class="text-xs text-[var(--foreground)]">${strengthCount} Ejercicios</b>
+            </div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5">
+            <span class="text-lg">🏃</span>
+            <div>
+              <span class="text-[10px] text-amber-500 font-bold block">Cardio Finisher</span>
+              <b class="text-xs text-[var(--foreground)]">20 min Zona 2 (Al Final)</b>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ============================================================ -->
@@ -124,19 +143,19 @@ export function renderWorkoutModule(container, preserveScroll = false) {
         <div class="space-y-4">
           ${routine.exercises.map((ex, exIndex) => {
             const prevLog = db.getLastExerciseLog(ex.id);
+            if (ex.isCardio) {
+              return renderStaticCardioCard(ex, exIndex);
+            }
             return renderStaticExerciseCard(ex, exIndex, prevLog);
           }).join('')}
-
-          <!-- Recomendación de Cardio al final -->
-          ${renderCardioCard(routine, false, 20)}
         </div>
       ` : `
         <!-- ============================================================ -->
-        <!-- VISTA EN VIVO (ACTIVA): Pendientes arriba, Cardio, Completados abajo -->
+        <!-- VISTA EN VIVO (ACTIVA): Pendientes arriba, Completados abajo -->
         <!-- ============================================================ -->
         <div class="space-y-4">
           
-          <!-- 1. EJERCICIOS PENDIENTES / EN CURSO -->
+          <!-- 1. ACTIVIDADES PENDIENTES / EN CURSO -->
           ${pendingExercises.length > 0 ? `
             <div class="space-y-1 mb-2">
               <div class="flex items-center justify-between px-1">
@@ -151,26 +170,24 @@ export function renderWorkoutModule(container, preserveScroll = false) {
             <div class="space-y-4">
               ${pendingExercises.map(item => {
                 const prevLog = db.getLastExerciseLog(item.exercise.exerciseId);
+                if (item.exercise.isCardio || item.definition.isCardio) {
+                  return renderLiveCardioCard(item.exercise, item.originalIndex, item.definition);
+                }
                 return renderLiveExerciseCard(item.exercise, item.originalIndex, item.definition, prevLog);
               }).join('')}
             </div>
           ` : `
-            <!-- Banner de Felicitación si no quedan máquinas pendientes -->
+            <!-- Banner si ya completó todo -->
             <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 text-center space-y-1.5">
-              <span class="text-2xl">🎉</span>
-              <h3 class="text-sm font-bold text-emerald-400">¡Excelente! Terminaste todas las máquinas de fuerza</h3>
+              <span class="text-2xl">🏆</span>
+              <h3 class="text-sm font-bold text-emerald-400">¡Sesión Completa! Rutina y Cardio finalizados</h3>
               <p class="text-xs text-[var(--muted-foreground)]">
-                Completa tu bloque de Cardio Finisher abajo para oxidar grasa visceral y luego pulsa "✓ Terminar".
+                ¡Gran trabajo, Michael! Pulsa el botón "✓ Terminar" arriba para guardar en tu historial evolutivo.
               </p>
             </div>
           `}
 
-          <!-- 2. CARDIO FINISHER (SIEMPRE AL FINAL DE LAS MÁQUINAS) -->
-          <div class="pt-2">
-            ${renderCardioCard(routine, cardioDone, cardioMinutes, true)}
-          </div>
-
-          <!-- 3. EJERCICIOS COMPLETADOS (ABAJO PARA NO ESTORBAR) -->
+          <!-- 2. ACTIVIDADES COMPLETADAS (ABAJO PARA NO ESTORBAR) -->
           ${completedExercises.length > 0 ? `
             <div class="mt-6 pt-4 border-t border-[var(--border)] space-y-3">
               <div class="flex items-center justify-between px-1">
@@ -180,7 +197,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
                     Completados (${completedExercises.length} de ${totalExercises})
                   </h3>
                 </div>
-                <span class="text-[10px] text-[var(--muted-foreground)]">Toca "Editar" si necesitas ajustar algo</span>
+                <span class="text-[10px] text-[var(--muted-foreground)]">Toca "Editar" si necesitas corregir</span>
               </div>
 
               <div class="space-y-2">
@@ -212,7 +229,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
 // COMPONENTES DE RENDERIZADO
 // --------------------------------------------------------------------------
 
-// 1. Tarjeta de Ejercicio en Modo Previa (no sesión activa)
+// 1. Tarjeta de Ejercicio de Fuerza en Modo Previa
 function renderStaticExerciseCard(ex, exIndex, prevLog) {
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.id}">
@@ -277,7 +294,55 @@ function renderStaticExerciseCard(ex, exIndex, prevLog) {
   `;
 }
 
-// 2. Tarjeta de Ejercicio en Vivo (Pendiente / En Curso)
+// 2. Tarjeta de Cardio Finisher en Modo Previa (Programado como último ejercicio del día)
+function renderStaticCardioCard(ex, exIndex) {
+  return `
+    <div class="bg-[var(--card)] rounded-2xl border-2 border-amber-500/40 shadow-sm overflow-hidden transition-all" id="card-${ex.id}">
+      <div class="p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                #${exIndex + 1}
+              </span>
+              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)] flex items-center gap-1.5">
+                <span>🏃 ${ex.name}</span>
+              </h3>
+            </div>
+            <p class="text-xs text-amber-500 font-semibold mt-0.5">${ex.machineName}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+                ${ex.baseWeight}
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">
+                Duración: ${ex.defaultReps}
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--muted-foreground)] font-medium">
+                Al Final de las Máquinas
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explicación Fisiológica de por qué se hace al final -->
+        <div class="mt-3 p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
+          <p class="text-[var(--foreground)] font-bold flex items-center gap-1.5 text-[11px]">
+            <span class="text-amber-500">💡</span> ¿Por qué va siempre al final de las máquinas?
+          </p>
+          <p class="text-[11px] leading-relaxed">
+            1. <b>Protege tu fuerza y tus 37 kg de masa muscular:</b> Las pesas requieren glucógeno intacto.<br>
+            2. <b>Quema máxima de grasa visceral:</b> Tras las máquinas, tu glucosa e insulina están bajas, por lo que el cardio en Zona 2 fuerza al organismo a consumir directamente los depósitos grasos del tronco.
+          </p>
+          <div class="pt-1 text-[11px] text-[var(--foreground)]">
+            <b>🔧 Ajuste recomendado:</b> ${ex.seatAdjustment}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 3. Tarjeta de Ejercicio de Fuerza en Vivo (Pendiente)
 function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.exerciseId}">
@@ -378,7 +443,75 @@ function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
   `;
 }
 
-// 3. Fila interactiva de cada serie
+// 4. Tarjeta de Cardio Finisher en Vivo (Con selector de minutos y botón de completar)
+function renderLiveCardioCard(ex, exIndex, def) {
+  const currentMins = (ex.sets && ex.sets[0] && ex.sets[0].weight) || 20;
+
+  return `
+    <div class="bg-[var(--card)] rounded-2xl border-2 border-amber-500/50 shadow-md overflow-hidden transition-all" id="card-${ex.exerciseId}">
+      <div class="p-4 pb-3 bg-gradient-to-r from-amber-500/5 to-emerald-500/5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-black">
+                #${exIndex + 1}
+              </span>
+              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)] flex items-center gap-1.5">
+                <span>🏃 ${ex.exerciseName}</span>
+              </h3>
+            </div>
+            <p class="text-xs text-amber-500 font-semibold mt-0.5">${def.machineName || 'Caminadora / Elíptica'}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20">
+                ${def.baseWeight || 'Zona 2 (110-125 lpm)'}
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-bold border border-amber-500/25">
+                Al Final de las Máquinas
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 p-3 rounded-xl bg-[var(--accent)]/60 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
+          <p class="text-[var(--foreground)] font-bold text-[11px] flex items-center gap-1">
+            <span class="text-amber-500">💡</span> Instrucción de ejecución:
+          </p>
+          <p class="text-[11px] leading-relaxed">
+            ${def.seatAdjustment || 'Ajustar a inclinación y ritmo constante.'}
+          </p>
+        </div>
+      </div>
+
+      <!-- Zona Interactiva de Cardio -->
+      <div class="bg-[var(--accent)]/40 border-t border-[var(--border)] p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          
+          <!-- Selector de minutos -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-[var(--muted-foreground)] font-semibold">Minutos realizados:</span>
+            <div class="flex items-center gap-1">
+              <button type="button" class="btn-cardio-adjust text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors" data-ex="${exIndex}" data-delta="-5">-5m</button>
+              <span id="cardioMinsDisplay-${exIndex}" class="text-xs font-mono font-bold px-2.5 py-1 bg-[var(--card)] rounded-lg text-[var(--foreground)] border border-[var(--border)]">${currentMins} min</span>
+              <button type="button" class="btn-cardio-adjust text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors" data-ex="${exIndex}" data-delta="5">+5m</button>
+            </div>
+          </div>
+
+          <!-- Botón de Completar Cardio -->
+          <button 
+            type="button" 
+            class="btn-toggle-set px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 hover:brightness-110"
+            data-ex="${exIndex}" 
+            data-set="0">
+            <span>⚡ Marcar Cardio Completado (${currentMins} min)</span>
+          </button>
+
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 5. Fila interactiva de cada serie
 function renderSetRow(exIndex, setIndex, set) {
   const isDone = !!set.completed;
   return `
@@ -433,9 +566,12 @@ function renderSetRow(exIndex, setIndex, set) {
   `;
 }
 
-// 4. Tarjeta compacta para Ejercicio Completado (Al final de la pantalla)
+// 6. Tarjeta compacta para Ejercicio Completado (Al final de la pantalla)
 function renderCompletedExerciseCard(ex, exIndex, def) {
-  const setsSummary = ex.sets.map(s => `${s.weight ? `${s.weight}lb` : ''} x ${s.reps}`).join(' • ');
+  const isCardio = !!ex.isCardio || !!def.isCardio;
+  const setsSummary = isCardio 
+    ? `${(ex.sets && ex.sets[0] && ex.sets[0].weight) || 20} min en Zona 2 completados`
+    : ex.sets.map(s => `${s.weight ? `${s.weight}lb` : ''} x ${s.reps}`).join(' • ');
 
   return `
     <div class="bg-[var(--card)]/75 border border-emerald-500/30 rounded-2xl p-3 shadow-xs transition-all opacity-95" id="card-${ex.exerciseId}">
@@ -447,7 +583,7 @@ function renderCompletedExerciseCard(ex, exIndex, def) {
               <span class="text-[10px] font-mono font-bold px-1 rounded bg-[var(--accent)] text-[var(--muted-foreground)]">#${exIndex + 1}</span>
               <h4 class="text-xs sm:text-sm font-bold text-[var(--foreground)] truncate">${ex.exerciseName}</h4>
             </div>
-            <p class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${setsSummary || 'Series completadas'}</p>
+            <p class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${setsSummary}</p>
           </div>
         </div>
 
@@ -462,77 +598,30 @@ function renderCompletedExerciseCard(ex, exIndex, def) {
 
       <!-- Editor de Series (Colapsado por defecto) -->
       <div id="completed-editor-${exIndex}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-2">
-        <p class="text-[10px] text-[var(--muted-foreground)]">Desmarca una serie si deseas devolver este ejercicio a la lista de pendientes:</p>
+        <p class="text-[10px] text-[var(--muted-foreground)]">Desmarca para devolver esta actividad a la lista de pendientes:</p>
         
-        <div class="grid grid-cols-12 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
-          <span class="col-span-2 text-center">Serie</span>
-          <span class="col-span-4 text-center">Peso</span>
-          <span class="col-span-3 text-center">Reps</span>
-          <span class="col-span-3 text-center">Listo</span>
-        </div>
-
-        ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
-      </div>
-    </div>
-  `;
-}
-
-// 5. Tarjeta de Cardio Finisher (Al final de la rutina)
-function renderCardioCard(routine, isCompleted, minutes = 20, isLive = false) {
-  return `
-    <div class="bg-[var(--card)] rounded-2xl border ${isCompleted ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-[var(--border)]'} p-4 shadow-xs transition-all">
-      <div class="flex items-start justify-between gap-3">
-        <div class="flex items-start gap-3">
-          <div class="w-10 h-10 rounded-xl ${isCompleted ? 'bg-emerald-500 text-slate-950' : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'} flex items-center justify-center text-xl shrink-0 mt-0.5">
-            ${isCompleted ? '✓' : '🏃'}
+        ${isCardio ? `
+          <div class="flex items-center justify-between p-2 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)]">
+            <span class="text-xs font-bold text-[var(--foreground)]">Cardio: ${(ex.sets && ex.sets[0] && ex.sets[0].weight) || 20} min Zona 2</span>
+            <button 
+              type="button" 
+              class="btn-toggle-set text-xs font-bold px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950"
+              data-ex="${exIndex}" 
+              data-set="0">
+              ✓ Completado (Desmarcar)
+            </button>
           </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)]">Cardio Finisher (Zona 2)</h3>
-              <span class="text-[10px] px-2 py-0.5 rounded-full ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold'}">
-                ${isCompleted ? 'Completado' : 'Al Final • Post-Fuerza'}
-              </span>
-            </div>
-            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
-              ${routine.cardio || '20 min Cinta inclinada / Elíptica (Zona 2: 110-125 lpm)'}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Explicación Clínica / Fisiológica de por qué se hace al final -->
-      <div class="mt-3 p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
-        <p class="text-[var(--foreground)] font-bold flex items-center gap-1.5 text-[11px]">
-          <span class="text-amber-500">💡</span> ¿Por qué siempre al final y no al inicio?
-        </p>
-        <p class="text-[11px] leading-relaxed">
-          1. <b>Protege tu fuerza y masa muscular:</b> Si haces cardio antes, agotas el glucógeno y rindes menos en las máquinas.<br>
-          2. <b>Quema más grasa visceral:</b> Tras 45 min de máquinas, la insulina está baja y el cardio a ritmo constante (110–125 lpm) fuerza a tu cuerpo a utilizar los depósitos de grasa como combustible directo.
-        </p>
-      </div>
-
-      <!-- Controles de Registro en Vivo -->
-      ${isLive ? `
-        <div class="mt-3 pt-3 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-[var(--muted-foreground)]">Duración:</span>
-            <div class="flex items-center gap-1">
-              <button type="button" id="btnCardioMinus" class="text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors">-5m</button>
-              <span id="cardioMinutesDisplay" class="text-xs font-mono font-bold px-2.5 py-1 bg-[var(--accent)] rounded-lg text-[var(--foreground)] border border-[var(--border)]">${minutes} min</span>
-              <button type="button" id="btnCardioPlus" class="text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors">+5m</button>
-            </div>
+        ` : `
+          <div class="grid grid-cols-12 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
+            <span class="col-span-2 text-center">Serie</span>
+            <span class="col-span-4 text-center">Peso</span>
+            <span class="col-span-3 text-center">Reps</span>
+            <span class="col-span-3 text-center">Listo</span>
           </div>
 
-          <button 
-            type="button" 
-            id="btnToggleCardio" 
-            class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${isCompleted 
-              ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950' 
-              : 'bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 hover:brightness-110'}">
-            <span>${isCompleted ? '✓ Cardio Registrado' : '⚡ Marcar Cardio Completado'}</span>
-          </button>
-        </div>
-      ` : ''}
+          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
+        `}
+      </div>
     </div>
   `;
 }
@@ -563,7 +652,7 @@ function attachWorkoutEvents(container, currentDayId) {
     });
   });
 
-  // Expandir editor en ejercicios completados
+  // Expandir editor en actividades completadas
   container.querySelectorAll('.btn-expand-completed').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = btn.getAttribute('data-ex');
@@ -616,7 +705,7 @@ function attachWorkoutEvents(container, currentDayId) {
     });
   });
 
-  // Botones +/- (ACTUALIZACIÓN DIRECTA EN EL DOM: Cero scroll jump, cero flicker)
+  // Botones +/- de fuerza (ACTUALIZACIÓN DIRECTA EN EL DOM: Cero scroll jump, cero flicker)
   container.querySelectorAll('.btn-step').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
@@ -630,13 +719,30 @@ function attachWorkoutEvents(container, currentDayId) {
         const newVal = Math.max(0, currentVal + delta);
         const formattedVal = Number.isInteger(newVal) ? newVal : Math.round(newVal * 10) / 10;
         input.value = formattedVal;
-        // Guardar silenciosamente en el estado y localStorage
         state.updateSet(exIndex, setIndex, field, formattedVal, false);
       }
     });
   });
 
-  // Toggle de Serie Completada
+  // Ajuste de minutos de Cardio
+  container.querySelectorAll('.btn-cardio-adjust').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIndex = parseInt(btn.getAttribute('data-ex'));
+      const delta = parseInt(btn.getAttribute('data-delta'));
+      const displayEl = document.getElementById(`cardioMinsDisplay-${exIndex}`);
+      const ex = state.activeWorkout.exercises[exIndex];
+      if (ex && ex.sets && ex.sets[0]) {
+        let current = parseInt(ex.sets[0].weight) || 20;
+        let next = Math.max(5, Math.min(60, current + delta));
+        ex.sets[0].weight = next;
+        ex.sets[0].reps = next;
+        state.updateSet(exIndex, 0, 'weight', next, false);
+        if (displayEl) displayEl.textContent = `${next} min`;
+      }
+    });
+  });
+
+  // Toggle de Serie Completada (incluye botón de completar Cardio)
   container.querySelectorAll('.btn-toggle-set').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
@@ -647,15 +753,15 @@ function attachWorkoutEvents(container, currentDayId) {
       // Actualizar en el estado silenciosamente
       state.toggleSetCompleted(exIndex, setIndex, false);
 
-      if (willBeCompleted) {
-        // Disparar temporizador flotante de 90s
+      if (willBeCompleted && !ex.isCardio) {
+        // Disparar temporizador flotante de 90s para máquinas de fuerza
         timer.start(90);
       }
 
       // Verificar si el estado global del ejercicio cambió (de pendiente a 100% completado, o viceversa)
       const allCompletedNow = ex.sets.every(s => s.completed);
 
-      if (allCompletedNow || !willBeCompleted) {
+      if (allCompletedNow || !willBeCompleted || ex.isCardio) {
         // El ejercicio cambió de categoría (pasa a Completados abajo o regresa a Pendientes)
         // Re-renderizar módulo preservando la posición exacta de scroll
         renderWorkoutModule(container, true);
@@ -682,7 +788,7 @@ function attachWorkoutEvents(container, currentDayId) {
     });
   });
 
-  // Botón "✓ Marcar todo listo" (Completa todas las series del ejercicio de un toque y lo baja a completados)
+  // Botón "✓ Marcar todo listo" (Fuerza)
   container.querySelectorAll('.btn-complete-all-sets').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
@@ -700,36 +806,4 @@ function attachWorkoutEvents(container, currentDayId) {
       renderWorkoutModule(container, true);
     });
   });
-
-  // Controles de Cardio (Duración +/- y Toggle Completado)
-  const btnCardioMinus = container.querySelector('#btnCardioMinus');
-  const btnCardioPlus = container.querySelector('#btnCardioPlus');
-  const cardioDisplay = container.querySelector('#cardioMinutesDisplay');
-  const btnToggleCardio = container.querySelector('#btnToggleCardio');
-
-  if (btnCardioMinus && cardioDisplay) {
-    btnCardioMinus.addEventListener('click', () => {
-      let mins = state.activeWorkout.cardioMinutes || 20;
-      mins = Math.max(5, mins - 5);
-      state.setCardioMinutes(mins);
-      cardioDisplay.textContent = `${mins} min`;
-    });
-  }
-
-  if (btnCardioPlus && cardioDisplay) {
-    btnCardioPlus.addEventListener('click', () => {
-      let mins = state.activeWorkout.cardioMinutes || 20;
-      mins = Math.min(60, mins + 5);
-      state.setCardioMinutes(mins);
-      cardioDisplay.textContent = `${mins} min`;
-    });
-  }
-
-  if (btnToggleCardio) {
-    btnToggleCardio.addEventListener('click', () => {
-      const currentMins = state.activeWorkout.cardioMinutes || 20;
-      state.toggleCardioCompleted(currentMins);
-      renderWorkoutModule(container, true);
-    });
-  }
 }

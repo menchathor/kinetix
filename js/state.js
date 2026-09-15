@@ -7,6 +7,25 @@ class AppState {
     this.activeTab = 'workout';
     this.selectedDay = 'torso1';
     this.activeWorkout = db.getActiveSession(); // Puede ser null o una sesión en progreso
+
+    // Migración automática: Si hay una sesión activa abierta sin el ejercicio de cardio, integrarlo de inmediato
+    if (this.activeWorkout && this.activeWorkout.routineId) {
+      const routine = INITIAL_DATA.routines[this.activeWorkout.routineId];
+      if (routine && routine.exercises) {
+        const cardioDef = routine.exercises.find(e => e.isCardio);
+        if (cardioDef && !this.activeWorkout.exercises.some(e => e.isCardio || e.exerciseId === cardioDef.id)) {
+          this.activeWorkout.exercises.push({
+            exerciseId: cardioDef.id,
+            exerciseName: cardioDef.name,
+            isCardio: true,
+            sets: [{ setNumber: 1, weight: 20, reps: 20, completed: !!this.activeWorkout.cardioDone }],
+            notes: ''
+          });
+          db.saveActiveSession(this.activeWorkout);
+        }
+      }
+    }
+
     this.listeners = [];
   }
 
@@ -35,8 +54,25 @@ class AppState {
       cardioMinutes: 20,
       notes: '',
       exercises: routine.exercises.map(ex => {
-        // Consultar registro previo para sugerir pesos
         const prev = db.getLastExerciseLog(ex.id);
+
+        if (ex.isCardio) {
+          return {
+            exerciseId: ex.id,
+            exerciseName: ex.name,
+            isCardio: true,
+            previousLog: prev,
+            sets: [{
+              setNumber: 1,
+              weight: 20, // 20 minutos
+              reps: 20,
+              completed: false,
+              rpe: ''
+            }],
+            notes: ''
+          };
+        }
+
         const suggestedWeight = prev ? prev.bestWeight : (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto' ? '' : ex.baseWeight);
 
         // Generar sets por defecto
@@ -54,6 +90,7 @@ class AppState {
         return {
           exerciseId: ex.id,
           exerciseName: ex.name,
+          isCardio: false,
           previousLog: prev,
           sets,
           notes: ''

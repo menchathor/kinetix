@@ -121,11 +121,18 @@ export function renderSettingsModule(container) {
         </div>
       </div>
 
-      <!-- INFO DE LA APLICACIÓN -->
-      <div class="p-4 rounded-2xl bg-[var(--accent)]/30 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
-        <p class="font-bold text-[var(--foreground)]">Kinetix v1.1 (PWA)</p>
-        <p>Diseñada a la medida para Michael Meneses • 18:00 hrs</p>
-        <p class="text-[11px] opacity-75">Soporte offline completo con Service Worker y Web Cache.</p>
+      <!-- INFO DE LA APLICACIÓN Y ACTUALIZACIONES -->
+      <div class="p-4 rounded-2xl bg-[var(--accent)]/30 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-2">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="font-bold text-[var(--foreground)]">Kinetix v1.3 (PWA)</p>
+            <p class="text-[11px]">Diseñada a la medida para Michael Meneses • 18:00 hrs</p>
+          </div>
+          <button id="btnClearCacheReload" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 font-bold border border-amber-500/30 text-[11px] flex items-center gap-1 transition-colors">
+            <span>🔄 Forzar Actualización</span>
+          </button>
+        </div>
+        <p class="text-[11px] opacity-75">Toca "Forzar Actualización" si hiciste cambios recientes y tu celular sigue mostrando la versión en caché.</p>
       </div>
 
     </div>
@@ -196,6 +203,27 @@ function attachSettingsEvents(container, settings) {
         }
       };
       reader.readAsText(file);
+    });
+  }
+
+  const btnClearCache = container.querySelector('#btnClearCacheReload');
+  if (btnClearCache) {
+    btnClearCache.addEventListener('click', async () => {
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+        alert('¡Caché limpiada con éxito! La aplicación se recargará con los archivos más recientes.');
+        window.location.reload(true);
+      } catch (err) {
+        console.error('Error limpiando caché:', err);
+        window.location.reload(true);
+      }
     });
   }
 }

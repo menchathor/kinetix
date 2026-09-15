@@ -118,6 +118,23 @@ export const INITIAL_DATA = {
             "Subir flexionando los brazos sin mover los codos hacia adelante ni arquear la espalda.",
             "Bajar en 2 segundos de forma estricta."
           ]
+        },
+        {
+          id: "cardio_finisher_torso1",
+          isCardio: true,
+          name: "Cardio Finisher (Zona 2 • Quema Grasa Visceral)",
+          machineName: "Cinta de Correr con Inclinación (Treadmill Incline)",
+          targetMuscles: "Sistema Cardiovascular & Quema de Grasa Visceral",
+          image: "",
+          defaultSets: 1,
+          defaultReps: "20 min",
+          baseWeight: "Zona 2 (110-125 lpm)",
+          seatAdjustment: "Inclinación 8-10%, velocidad caminata enérgica 4.8 km/h.",
+          tips: [
+            "Hacer SIEMPRE al final de la sesión de fuerza para no agotar el glucógeno antes de las máquinas.",
+            "Mantener un paso constante donde puedas hablar sin ahogarte (Zona 2 conversacional).",
+            "A esta intensidad tu cuerpo utiliza directamente los ácidos grasos del tronco como combustible sin elevar el cortisol."
+          ]
         }
       ]
     },
@@ -206,6 +223,23 @@ export const INITIAL_DATA = {
           tips: [
             "Exhalar todo el aire al flexionar el tronco, apretando el abdomen.",
             "El movimiento debe originarse en el core, no tirando con los brazos."
+          ]
+        },
+        {
+          id: "cardio_finisher_pierna1",
+          isCardio: true,
+          name: "Cardio Finisher (Zona 2 • Recuperación Activa)",
+          machineName: "Elíptica o Bicicleta Estática Suave",
+          targetMuscles: "Sistema Cardiovascular & Quema de Grasa Visceral",
+          image: "",
+          defaultSets: 1,
+          defaultReps: "20 min",
+          baseWeight: "Zona 2 (110-120 lpm)",
+          seatAdjustment: "Resistencia moderada (nivel 4-6), bajo impacto articular tras prensa y piernas.",
+          tips: [
+            "Hacer al final de la sesión para drenar ácido láctico y oxidar grasa.",
+            "Cadencia fluida sin forzar las rodillas tras el trabajo pesado de piernas.",
+            "Mantener pulsaciones entre 110 y 120 lpm a ritmo conversacional."
           ]
         }
       ]
@@ -308,6 +342,22 @@ export const INITIAL_DATA = {
             "Hacer primero 12 reps de extensión de tríceps tras nuca, e inmediatamente 12 reps de curl martillo.",
             "Descansar 90 segundos al terminar ambas."
           ]
+        },
+        {
+          id: "cardio_finisher_torso2",
+          isCardio: true,
+          name: "Cardio Finisher (Zona 2 • Quema Grasa Visceral)",
+          machineName: "Cinta de Correr con Inclinación",
+          targetMuscles: "Sistema Cardiovascular & Quema de Grasa Visceral",
+          image: "",
+          defaultSets: 1,
+          defaultReps: "20 min",
+          baseWeight: "Zona 2 (115-125 lpm)",
+          seatAdjustment: "Inclinación 8-9%, velocidad 4.8 km/h.",
+          tips: [
+            "Hacer al final: con el glucógeno bajo tras el pectoral y espalda, atacas directamente la grasa del tronco.",
+            "Respiración nasal controlada a ritmo constante."
+          ]
         }
       ]
     },
@@ -392,6 +442,22 @@ export const INITIAL_DATA = {
           tips: [
             "Elevar las rodillas hacia el pecho sin balancear el cuerpo.",
             "O mantener plancha horizontal activando glúteos y abdomen."
+          ]
+        },
+        {
+          id: "cardio_finisher_pierna2",
+          isCardio: true,
+          name: "Cardio Finisher (Zona 2 • Vaciado y Quema)",
+          machineName: "Bicicleta Estática o Caminadora Plana",
+          targetMuscles: "Sistema Cardiovascular & Quema de Grasa Visceral",
+          image: "",
+          defaultSets: 1,
+          defaultReps: "20 min",
+          baseWeight: "Zona 2 (110-120 lpm)",
+          seatAdjustment: "Asiento regulado a la altura de la cadera al estar de pie.",
+          tips: [
+            "Pedaleo continuo y fluido a ritmo conversacional.",
+            "Excelente para cerrar la semana sin sobrecargar articulaciones."
           ]
         }
       ]
