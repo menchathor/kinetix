@@ -32,6 +32,7 @@ class AppState {
       dayName: routine.dayName,
       startTime: new Date().toISOString(),
       cardioDone: false,
+      cardioMinutes: 20,
       notes: '',
       exercises: routine.exercises.map(ex => {
         // Consultar registro previo para sugerir pesos
@@ -64,20 +65,52 @@ class AppState {
     this.notify();
   }
 
-  updateSet(exerciseIndex, setIndex, field, value) {
+  updateSet(exerciseIndex, setIndex, field, value, shouldNotify = true) {
     if (!this.activeWorkout) return;
     this.activeWorkout.exercises[exerciseIndex].sets[setIndex][field] = value;
     db.saveActiveSession(this.activeWorkout);
-    this.notify();
+    if (shouldNotify) {
+      this.notify();
+    }
   }
 
-  toggleSetCompleted(exerciseIndex, setIndex) {
-    if (!this.activeWorkout) return;
+  toggleSetCompleted(exerciseIndex, setIndex, shouldNotify = true) {
+    if (!this.activeWorkout) return false;
     const current = this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed;
     this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed = !current;
     db.saveActiveSession(this.activeWorkout);
-    this.notify();
+    if (shouldNotify) {
+      this.notify();
+    }
     return !current; // retorna el nuevo estado
+  }
+
+  completeAllSetsOfExercise(exerciseIndex) {
+    if (!this.activeWorkout) return;
+    const ex = this.activeWorkout.exercises[exerciseIndex];
+    if (ex && ex.sets) {
+      ex.sets.forEach(s => {
+        s.completed = true;
+      });
+      db.saveActiveSession(this.activeWorkout);
+      this.notify();
+    }
+  }
+
+  toggleCardioCompleted(minutes = 20) {
+    if (!this.activeWorkout) return false;
+    const current = !!this.activeWorkout.cardioDone;
+    this.activeWorkout.cardioDone = !current;
+    this.activeWorkout.cardioMinutes = this.activeWorkout.cardioDone ? minutes : 0;
+    db.saveActiveSession(this.activeWorkout);
+    this.notify();
+    return this.activeWorkout.cardioDone;
+  }
+
+  setCardioMinutes(minutes) {
+    if (!this.activeWorkout) return;
+    this.activeWorkout.cardioMinutes = Math.max(5, parseInt(minutes) || 20);
+    db.saveActiveSession(this.activeWorkout);
   }
 
   addSetToExercise(exerciseIndex) {

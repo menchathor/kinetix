@@ -17,17 +17,20 @@ class App {
     // Configurar Tema (Claro / Oscuro)
     this.initTheme();
 
-    // Suscribirse a cambios de estado global
+    // Suscribirse a cambios de estado global (preserva la posición de scroll)
     state.subscribe(() => {
-      this.renderCurrentView();
+      this.renderCurrentView(true);
       this.updateNavigationUI();
     });
 
-    // Configurar navegación inferior
+    // Configurar navegación inferior (al cambiar de pestaña sí resetea el scroll al inicio)
     document.querySelectorAll('.nav-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab');
-        state.setTab(tab);
+        if (tab !== state.activeTab) {
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          state.setTab(tab);
+        }
       });
     });
 
@@ -35,7 +38,7 @@ class App {
     this.setupTimerUI();
 
     // Render inicial
-    this.renderCurrentView();
+    this.renderCurrentView(false);
     this.updateNavigationUI();
 
     // Registrar Service Worker para soporte offline PWA
@@ -56,8 +59,8 @@ class App {
         document.documentElement.classList.toggle('dark', nextDark);
         localStorage.setItem('smartfit_theme', nextDark ? 'dark' : 'light');
         this.updateThemeIcon(nextDark);
-        // Refrescar vista actual para adaptar gráficas de Chart.js
-        this.renderCurrentView();
+        // Refrescar vista actual para adaptar gráficas de Chart.js preservando scroll
+        this.renderCurrentView(true);
       });
     }
   }
@@ -69,9 +72,9 @@ class App {
     }
   }
 
-  renderCurrentView() {
+  renderCurrentView(preserveScroll = false) {
     if (!this.container) return;
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    const previousScrollY = window.scrollY;
 
     switch (state.activeTab) {
       case 'workout':
@@ -88,6 +91,14 @@ class App {
         break;
       default:
         renderWorkoutModule(this.container);
+    }
+
+    if (preserveScroll) {
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: previousScrollY, behavior: 'instant' });
+      });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
   }
 

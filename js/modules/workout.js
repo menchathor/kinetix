@@ -4,15 +4,42 @@ import { state } from '../state.js';
 import { db } from '../services/db.js';
 import { timer } from '../services/timer.js';
 
-export function renderWorkoutModule(container) {
+export function renderWorkoutModule(container, preserveScroll = false) {
+  const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
   const currentDayId = isLive ? state.activeWorkout.routineId : state.selectedDay;
   const routine = INITIAL_DATA.routines[currentDayId] || INITIAL_DATA.routines.torso1;
 
+  // Clasificar ejercicios en pendientes y completados si la sesión está en vivo
+  let pendingExercises = [];
+  let completedExercises = [];
+
+  if (isLive && state.activeWorkout.exercises) {
+    state.activeWorkout.exercises.forEach((ex, idx) => {
+      const isComplete = ex.sets && ex.sets.length > 0 && ex.sets.every(s => s.completed);
+      const item = {
+        exercise: ex,
+        originalIndex: idx,
+        definition: routine.exercises[idx] || {}
+      };
+      if (isComplete) {
+        completedExercises.push(item);
+      } else {
+        pendingExercises.push(item);
+      }
+    });
+  }
+
+  const cardioDone = isLive ? !!state.activeWorkout.cardioDone : false;
+  const cardioMinutes = isLive ? (state.activeWorkout.cardioMinutes || 20) : 20;
+  const totalExercises = routine.exercises.length;
+  const completedCount = completedExercises.length;
+  const progressPercent = isLive ? Math.round((completedCount / totalExercises) * 100) : 0;
+
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
       
-      <!-- Selector de Días (Deshabilitado durante sesión en vivo para no perder foco) -->
+      <!-- Selector de Días (Solo visible cuando no hay sesión en curso) -->
       ${!isLive ? `
         <div class="bg-[var(--card)] p-2 rounded-2xl border border-[var(--border)] shadow-xs">
           <div class="grid grid-cols-4 gap-1.5" id="dayTabs">
@@ -38,7 +65,7 @@ export function renderWorkoutModule(container) {
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
               </span>
               <div>
-                <h3 class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${routine.title}</h3>
+                <h3 class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${routine.name}</h3>
                 <p class="text-xs text-[var(--muted-foreground)]">${routine.dayName} • Sesión 18:00 hrs</p>
               </div>
             </div>
@@ -49,6 +76,21 @@ export function renderWorkoutModule(container) {
               <button id="btnCancelWorkout" class="text-rose-400 hover:bg-rose-500/10 text-xs px-2 py-1.5 rounded-lg transition-all" title="Descartar">
                 ✕
               </button>
+            </div>
+          </div>
+
+          <!-- Barra de Progreso de la Sesión -->
+          <div class="mt-3 pt-2.5 border-t border-emerald-500/30">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="text-[var(--muted-foreground)]">
+                <b>${completedCount}</b> de <b>${totalExercises}</b> máquinas listas (${progressPercent}%)
+              </span>
+              <span class="font-bold ${cardioDone ? 'text-emerald-400' : 'text-amber-500'}">
+                ${cardioDone ? '🏃 Cardio: ✓ Listo' : '🏃 Cardio: Pendiente'}
+              </span>
+            </div>
+            <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300 rounded-full" style="width: ${progressPercent}%"></div>
             </div>
           </div>
         </div>
@@ -73,174 +115,435 @@ export function renderWorkoutModule(container) {
             </button>
           ` : ''}
         </div>
-
-        <!-- Cardio Nota -->
-        <div class="mt-3 pt-3 border-t border-[var(--border)] flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-          <span class="text-amber-500">🏃</span>
-          <span><b>Cardio Zona 2:</b> ${routine.cardio}</span>
-        </div>
       </div>
 
-      <!-- Lista de Ejercicios -->
-      <div class="space-y-4">
-        ${routine.exercises.map((ex, exIndex) => {
-          const prevLog = db.getLastExerciseLog(ex.id);
-          const activeExercise = isLive ? state.activeWorkout.exercises[exIndex] : null;
+      <!-- ============================================================ -->
+      <!-- VISTA MODO PREVIA (NO EN VIVO): Todos los ejercicios en orden -->
+      <!-- ============================================================ -->
+      ${!isLive ? `
+        <div class="space-y-4">
+          ${routine.exercises.map((ex, exIndex) => {
+            const prevLog = db.getLastExerciseLog(ex.id);
+            return renderStaticExerciseCard(ex, exIndex, prevLog);
+          }).join('')}
 
-          return `
-            <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.id}">
-              
-              <!-- Cabecera del Ejercicio -->
-              <div class="p-4 pb-3">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                      <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--muted-foreground)]">
-                        #${exIndex + 1}
-                      </span>
-                      <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)]">${ex.name}</h3>
-                    </div>
-                    <p class="text-xs text-[var(--muted-foreground)] mt-0.5">${ex.machineName}</p>
-                    <div class="flex flex-wrap items-center gap-1.5 mt-2">
-                      <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--muted-foreground)] font-medium">
-                        ${ex.targetMuscles}
-                      </span>
-                      <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">
-                        Pauta: ${ex.defaultSets} series x ${ex.defaultReps} reps
-                      </span>
-                    </div>
-                  </div>
+          <!-- Recomendación de Cardio al final -->
+          ${renderCardioCard(routine, false, 20)}
+        </div>
+      ` : `
+        <!-- ============================================================ -->
+        <!-- VISTA EN VIVO (ACTIVA): Pendientes arriba, Cardio, Completados abajo -->
+        <!-- ============================================================ -->
+        <div class="space-y-4">
+          
+          <!-- 1. EJERCICIOS PENDIENTES / EN CURSO -->
+          ${pendingExercises.length > 0 ? `
+            <div class="space-y-1 mb-2">
+              <div class="flex items-center justify-between px-1">
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
+                  <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                  Por Realizar (${pendingExercises.length})
+                </span>
+                <span class="text-[10px] text-[var(--muted-foreground)]">Al completarlos bajan automáticamente</span>
+              </div>
+            </div>
 
-                  <!-- Badge de Carga Base / Registro Previo -->
-                  <div class="text-right shrink-0">
-                    <span class="text-[10px] text-[var(--muted-foreground)] block">Marca previa:</span>
-                    <span class="text-xs font-mono font-bold px-2 py-1 rounded-lg bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] inline-block mt-0.5">
-                      ${prevLog ? `${prevLog.bestWeight} lb x ${prevLog.bestReps}` : (ex.baseWeight !== 'Pendiente' && ex.baseWeight !== 'Auto' ? `${ex.baseWeight} lb/placa` : 'Pendiente')}
-                    </span>
-                  </div>
+            <div class="space-y-4">
+              ${pendingExercises.map(item => {
+                const prevLog = db.getLastExerciseLog(item.exercise.exerciseId);
+                return renderLiveExerciseCard(item.exercise, item.originalIndex, item.definition, prevLog);
+              }).join('')}
+            </div>
+          ` : `
+            <!-- Banner de Felicitación si no quedan máquinas pendientes -->
+            <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 text-center space-y-1.5">
+              <span class="text-2xl">🎉</span>
+              <h3 class="text-sm font-bold text-emerald-400">¡Excelente! Terminaste todas las máquinas de fuerza</h3>
+              <p class="text-xs text-[var(--muted-foreground)]">
+                Completa tu bloque de Cardio Finisher abajo para oxidar grasa visceral y luego pulsa "✓ Terminar".
+              </p>
+            </div>
+          `}
+
+          <!-- 2. CARDIO FINISHER (SIEMPRE AL FINAL DE LAS MÁQUINAS) -->
+          <div class="pt-2">
+            ${renderCardioCard(routine, cardioDone, cardioMinutes, true)}
+          </div>
+
+          <!-- 3. EJERCICIOS COMPLETADOS (ABAJO PARA NO ESTORBAR) -->
+          ${completedExercises.length > 0 ? `
+            <div class="mt-6 pt-4 border-t border-[var(--border)] space-y-3">
+              <div class="flex items-center justify-between px-1">
+                <div class="flex items-center gap-2">
+                  <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">✓</span>
+                  <h3 class="text-xs uppercase font-bold tracking-wider text-emerald-500">
+                    Completados (${completedExercises.length} de ${totalExercises})
+                  </h3>
                 </div>
-
-                <!-- Botón colapsable para Ver Imagen y Tips Técnicos -->
-                <div class="mt-3">
-                  <button data-toggle="tips-${ex.id}" class="tips-toggle-btn text-xs text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 transition-colors">
-                    <span>📖 Ver infografía de máquina y tips</span>
-                    <span class="text-[10px] transform transition-transform" id="arrow-tips-${ex.id}">▼</span>
-                  </button>
-                  
-                  <div id="tips-${ex.id}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-3">
-                    ${ex.image ? `
-                      <div class="rounded-xl overflow-hidden border border-[var(--border)] bg-black/20 max-w-md mx-auto">
-                        <img src="${ex.image}" alt="${ex.name}" class="w-full h-auto object-cover" loading="lazy" />
-                      </div>
-                    ` : ''}
-
-                    <div class="bg-[var(--accent)]/50 rounded-xl p-3 text-xs space-y-2">
-                      <div>
-                        <b class="text-[var(--foreground)]">🔧 Ajuste de asiento / máquina:</b>
-                        <p class="text-[var(--muted-foreground)] mt-0.5">${ex.seatAdjustment}</p>
-                      </div>
-                      <div>
-                        <b class="text-[var(--foreground)]">💡 Claves de ejecución:</b>
-                        <ul class="list-disc list-inside space-y-1 text-[var(--muted-foreground)] mt-1">
-                          ${ex.tips.map(t => `<li>${t}</li>`).join('')}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <span class="text-[10px] text-[var(--muted-foreground)]">Toca "Editar" si necesitas ajustar algo</span>
               </div>
 
-              <!-- ZONA DE REGISTRO EN VIVO (Si la sesión está activa) -->
-              ${isLive && activeExercise ? `
-                <div class="bg-[var(--accent)]/30 border-t border-[var(--border)] p-3 sm:p-4">
-                  <div class="space-y-2">
-                    <div class="grid grid-cols-12 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
-                      <span class="col-span-2 text-center">Serie</span>
-                      <span class="col-span-4 text-center">Peso (lb/placa)</span>
-                      <span class="col-span-3 text-center">Reps</span>
-                      <span class="col-span-3 text-center">Listo</span>
-                    </div>
-
-                    ${activeExercise.sets.map((set, setIndex) => `
-                      <div class="grid grid-cols-12 items-center gap-2 p-1.5 rounded-xl ${set.completed ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-[var(--card)] border border-[var(--border)]'}">
-                        <!-- Serie # -->
-                        <span class="col-span-2 text-center text-xs font-mono font-bold text-[var(--muted-foreground)]">
-                          ${set.setNumber}
-                        </span>
-
-                        <!-- Peso Input con botones +/- -->
-                        <div class="col-span-4 flex items-center justify-center gap-1">
-                          <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5">-</button>
-                          <input 
-                            type="number" 
-                            step="any" 
-                            value="${set.weight}" 
-                            placeholder="Peso"
-                            class="input-set-field w-14 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
-                            data-ex="${exIndex}" 
-                            data-set="${setIndex}" 
-                            data-field="weight" />
-                          <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5">+</button>
-                        </div>
-
-                        <!-- Reps Input con botones +/- -->
-                        <div class="col-span-3 flex items-center justify-center gap-1">
-                          <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1">-</button>
-                          <input 
-                            type="number" 
-                            value="${set.reps}" 
-                            placeholder="Reps"
-                            class="input-set-field w-10 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
-                            data-ex="${exIndex}" 
-                            data-set="${setIndex}" 
-                            data-field="reps" />
-                          <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1">+</button>
-                        </div>
-
-                        <!-- Checkbox Completar Serie -->
-                        <div class="col-span-3 flex justify-center">
-                          <button 
-                            type="button" 
-                            class="btn-toggle-set w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${set.completed 
-                              ? 'bg-emerald-500 text-slate-950 shadow-sm' 
-                              : 'bg-[var(--card)] hover:bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)]'}"
-                            data-ex="${exIndex}" 
-                            data-set="${setIndex}">
-                            ${set.completed ? '✓' : '○'}
-                          </button>
-                        </div>
-                      </div>
-                    `).join('')}
-
-                    <div class="flex items-center justify-between pt-1">
-                      <button 
-                        type="button" 
-                        class="btn-add-set text-xs text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
-                        data-ex="${exIndex}">
-                        + Añadir Serie
-                      </button>
-                      <span class="text-[10px] text-[var(--muted-foreground)]">Descanso sugerido: 90 seg</span>
-                    </div>
-                  </div>
-                </div>
-              ` : ''}
-
+              <div class="space-y-2">
+                ${completedExercises.map(item => {
+                  return renderCompletedExerciseCard(item.exercise, item.originalIndex, item.definition);
+                }).join('')}
+              </div>
             </div>
-          `;
-        }).join('')}
-      </div>
+          ` : ''}
+
+        </div>
+      `}
 
     </div>
   `;
 
   // Attach Event Listeners
   attachWorkoutEvents(container, currentDayId);
+
+  // Si se solicitó preservar scroll, restaurarlo de inmediato
+  if (preserveScroll) {
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: previousScrollY, behavior: 'instant' });
+    });
+  }
 }
 
+// --------------------------------------------------------------------------
+// COMPONENTES DE RENDERIZADO
+// --------------------------------------------------------------------------
+
+// 1. Tarjeta de Ejercicio en Modo Previa (no sesión activa)
+function renderStaticExerciseCard(ex, exIndex, prevLog) {
+  return `
+    <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.id}">
+      <div class="p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--muted-foreground)]">
+                #${exIndex + 1}
+              </span>
+              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)]">${ex.name}</h3>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">${ex.machineName}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--muted-foreground)] font-medium">
+                ${ex.targetMuscles}
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">
+                Pauta: ${ex.defaultSets} series x ${ex.defaultReps} reps
+              </span>
+            </div>
+          </div>
+
+          <div class="text-right shrink-0">
+            <span class="text-[10px] text-[var(--muted-foreground)] block">Marca previa:</span>
+            <span class="text-xs font-mono font-bold px-2 py-1 rounded-lg bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] inline-block mt-0.5">
+              ${prevLog ? `${prevLog.bestWeight} lb x ${prevLog.bestReps}` : (ex.baseWeight !== 'Pendiente' && ex.baseWeight !== 'Auto' ? `${ex.baseWeight} lb/placa` : 'Pendiente')}
+            </span>
+          </div>
+        </div>
+
+        <!-- Botón colapsable para Ver Imagen y Tips Técnicos -->
+        <div class="mt-3">
+          <button data-toggle="tips-${ex.id}" class="tips-toggle-btn text-xs text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 transition-colors">
+            <span>📖 Ver infografía de máquina y tips</span>
+            <span class="text-[10px] transform transition-transform" id="arrow-tips-${ex.id}">▼</span>
+          </button>
+          
+          <div id="tips-${ex.id}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-3">
+            ${ex.image ? `
+              <div class="rounded-xl overflow-hidden border border-[var(--border)] bg-black/20 max-w-md mx-auto">
+                <img src="${ex.image}" alt="${ex.name}" class="w-full h-auto object-cover" loading="lazy" />
+              </div>
+            ` : ''}
+
+            <div class="bg-[var(--accent)]/50 rounded-xl p-3 text-xs space-y-2">
+              <div>
+                <b class="text-[var(--foreground)]">🔧 Ajuste de asiento / máquina:</b>
+                <p class="text-[var(--muted-foreground)] mt-0.5">${ex.seatAdjustment}</p>
+              </div>
+              <div>
+                <b class="text-[var(--foreground)]">💡 Claves de ejecución:</b>
+                <ul class="list-disc list-inside space-y-1 text-[var(--muted-foreground)] mt-1">
+                  ${ex.tips.map(t => `<li>${t}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 2. Tarjeta de Ejercicio en Vivo (Pendiente / En Curso)
+function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
+  return `
+    <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.exerciseId}">
+      <!-- Cabecera -->
+      <div class="p-4 pb-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--muted-foreground)]">
+                #${exIndex + 1}
+              </span>
+              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)]">${ex.exerciseName}</h3>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">${def.machineName || ''}</p>
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--muted-foreground)] font-medium">
+                ${def.targetMuscles || 'Fuerza'}
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold">
+                Pauta: ${def.defaultSets || 3} series x ${def.defaultReps || '8-10'} reps
+              </span>
+            </div>
+          </div>
+
+          <!-- Marca previa -->
+          <div class="text-right shrink-0">
+            <span class="text-[10px] text-[var(--muted-foreground)] block">Marca previa:</span>
+            <span class="text-xs font-mono font-bold px-2 py-1 rounded-lg bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] inline-block mt-0.5">
+              ${prevLog ? `${prevLog.bestWeight} lb x ${prevLog.bestReps}` : (def.baseWeight && def.baseWeight !== 'Pendiente' ? `${def.baseWeight} lb` : 'Pendiente')}
+            </span>
+          </div>
+        </div>
+
+        <!-- Tips colapsables -->
+        <div class="mt-3">
+          <button data-toggle="tips-${ex.exerciseId}" class="tips-toggle-btn text-xs text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 transition-colors">
+            <span>📖 Ver infografía de máquina y tips</span>
+            <span class="text-[10px] transform transition-transform" id="arrow-tips-${ex.exerciseId}">▼</span>
+          </button>
+          
+          <div id="tips-${ex.exerciseId}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-3">
+            ${def.image ? `
+              <div class="rounded-xl overflow-hidden border border-[var(--border)] bg-black/20 max-w-md mx-auto">
+                <img src="${def.image}" alt="${ex.exerciseName}" class="w-full h-auto object-cover" loading="lazy" />
+              </div>
+            ` : ''}
+
+            <div class="bg-[var(--accent)]/50 rounded-xl p-3 text-xs space-y-2">
+              <div>
+                <b class="text-[var(--foreground)]">🔧 Ajuste de asiento / máquina:</b>
+                <p class="text-[var(--muted-foreground)] mt-0.5">${def.seatAdjustment || 'Ajustar a la altura anatómica cómoda.'}</p>
+              </div>
+              <div>
+                <b class="text-[var(--foreground)]">💡 Claves de ejecución:</b>
+                <ul class="list-disc list-inside space-y-1 text-[var(--muted-foreground)] mt-1">
+                  ${(def.tips || []).map(t => `<li>${t}</li>`).join('')}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ZONA DE REGISTRO EN VIVO -->
+      <div class="bg-[var(--accent)]/30 border-t border-[var(--border)] p-3 sm:p-4">
+        <div class="space-y-2">
+          <div class="grid grid-cols-12 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
+            <span class="col-span-2 text-center">Serie</span>
+            <span class="col-span-4 text-center">Peso (lb/placa)</span>
+            <span class="col-span-3 text-center">Reps</span>
+            <span class="col-span-3 text-center">Listo</span>
+          </div>
+
+          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
+
+          <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/40 mt-1">
+            <button 
+              type="button" 
+              class="btn-add-set text-xs text-amber-500 hover:text-amber-400 font-semibold flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
+              data-ex="${exIndex}">
+              + Añadir Serie
+            </button>
+
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-[var(--muted-foreground)]">Descanso: 90s</span>
+              <button 
+                type="button" 
+                class="btn-complete-all-sets text-[11px] font-bold px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-all flex items-center gap-1"
+                data-ex="${exIndex}"
+                title="Marcar todas las series listas y mover a completados">
+                <span>✓ Marcar todo listo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 3. Fila interactiva de cada serie
+function renderSetRow(exIndex, setIndex, set) {
+  const isDone = !!set.completed;
+  return `
+    <div class="set-row grid grid-cols-12 items-center gap-2 p-1.5 rounded-xl transition-all ${isDone ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-[var(--card)] border border-[var(--border)]'}" data-ex="${exIndex}" data-set="${setIndex}">
+      <!-- Serie # -->
+      <span class="col-span-2 text-center text-xs font-mono font-bold text-[var(--muted-foreground)]">
+        ${set.setNumber}
+      </span>
+
+      <!-- Peso Input con botones +/- -->
+      <div class="col-span-4 flex items-center justify-center gap-1">
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5">-</button>
+        <input 
+          type="number" 
+          step="any" 
+          value="${set.weight}" 
+          placeholder="Peso"
+          class="input-set-field w-14 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
+          data-ex="${exIndex}" 
+          data-set="${setIndex}" 
+          data-field="weight" />
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5">+</button>
+      </div>
+
+      <!-- Reps Input con botones +/- -->
+      <div class="col-span-3 flex items-center justify-center gap-1">
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1">-</button>
+        <input 
+          type="number" 
+          value="${set.reps}" 
+          placeholder="Reps"
+          class="input-set-field w-10 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
+          data-ex="${exIndex}" 
+          data-set="${setIndex}" 
+          data-field="reps" />
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1">+</button>
+      </div>
+
+      <!-- Checkbox Completar Serie -->
+      <div class="col-span-3 flex justify-center">
+        <button 
+          type="button" 
+          class="btn-toggle-set w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone 
+            ? 'bg-emerald-500 text-slate-950 shadow-sm' 
+            : 'bg-[var(--card)] hover:bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)]'}"
+          data-ex="${exIndex}" 
+          data-set="${setIndex}">
+          ${isDone ? '✓' : '○'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// 4. Tarjeta compacta para Ejercicio Completado (Al final de la pantalla)
+function renderCompletedExerciseCard(ex, exIndex, def) {
+  const setsSummary = ex.sets.map(s => `${s.weight ? `${s.weight}lb` : ''} x ${s.reps}`).join(' • ');
+
+  return `
+    <div class="bg-[var(--card)]/75 border border-emerald-500/30 rounded-2xl p-3 shadow-xs transition-all opacity-95" id="card-${ex.exerciseId}">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <span class="w-6 h-6 rounded-full bg-emerald-500 text-slate-950 text-xs font-black flex items-center justify-center shrink-0">✓</span>
+          <div class="truncate">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] font-mono font-bold px-1 rounded bg-[var(--accent)] text-[var(--muted-foreground)]">#${exIndex + 1}</span>
+              <h4 class="text-xs sm:text-sm font-bold text-[var(--foreground)] truncate">${ex.exerciseName}</h4>
+            </div>
+            <p class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${setsSummary || 'Series completadas'}</p>
+          </div>
+        </div>
+
+        <button 
+          type="button" 
+          class="btn-expand-completed shrink-0 text-[11px] font-semibold text-amber-500 hover:text-amber-400 px-2.5 py-1 rounded-xl bg-[var(--accent)] border border-[var(--border)] flex items-center gap-1 transition-colors"
+          data-ex="${exIndex}">
+          <span>Editar</span>
+          <span class="text-[9px] transform transition-transform" id="arrow-completed-${exIndex}">▼</span>
+        </button>
+      </div>
+
+      <!-- Editor de Series (Colapsado por defecto) -->
+      <div id="completed-editor-${exIndex}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+        <p class="text-[10px] text-[var(--muted-foreground)]">Desmarca una serie si deseas devolver este ejercicio a la lista de pendientes:</p>
+        
+        <div class="grid grid-cols-12 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
+          <span class="col-span-2 text-center">Serie</span>
+          <span class="col-span-4 text-center">Peso</span>
+          <span class="col-span-3 text-center">Reps</span>
+          <span class="col-span-3 text-center">Listo</span>
+        </div>
+
+        ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// 5. Tarjeta de Cardio Finisher (Al final de la rutina)
+function renderCardioCard(routine, isCompleted, minutes = 20, isLive = false) {
+  return `
+    <div class="bg-[var(--card)] rounded-2xl border ${isCompleted ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-[var(--border)]'} p-4 shadow-xs transition-all">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl ${isCompleted ? 'bg-emerald-500 text-slate-950' : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'} flex items-center justify-center text-xl shrink-0 mt-0.5">
+            ${isCompleted ? '✓' : '🏃'}
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-sm sm:text-base text-[var(--foreground)]">Cardio Finisher (Zona 2)</h3>
+              <span class="text-[10px] px-2 py-0.5 rounded-full ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 font-bold' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20 font-bold'}">
+                ${isCompleted ? 'Completado' : 'Al Final • Post-Fuerza'}
+              </span>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+              ${routine.cardio || '20 min Cinta inclinada / Elíptica (Zona 2: 110-125 lpm)'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Explicación Clínica / Fisiológica de por qué se hace al final -->
+      <div class="mt-3 p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-1">
+        <p class="text-[var(--foreground)] font-bold flex items-center gap-1.5 text-[11px]">
+          <span class="text-amber-500">💡</span> ¿Por qué siempre al final y no al inicio?
+        </p>
+        <p class="text-[11px] leading-relaxed">
+          1. <b>Protege tu fuerza y masa muscular:</b> Si haces cardio antes, agotas el glucógeno y rindes menos en las máquinas.<br>
+          2. <b>Quema más grasa visceral:</b> Tras 45 min de máquinas, la insulina está baja y el cardio a ritmo constante (110–125 lpm) fuerza a tu cuerpo a utilizar los depósitos de grasa como combustible directo.
+        </p>
+      </div>
+
+      <!-- Controles de Registro en Vivo -->
+      ${isLive ? `
+        <div class="mt-3 pt-3 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-[var(--muted-foreground)]">Duración:</span>
+            <div class="flex items-center gap-1">
+              <button type="button" id="btnCardioMinus" class="text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors">-5m</button>
+              <span id="cardioMinutesDisplay" class="text-xs font-mono font-bold px-2.5 py-1 bg-[var(--accent)] rounded-lg text-[var(--foreground)] border border-[var(--border)]">${minutes} min</span>
+              <button type="button" id="btnCardioPlus" class="text-xs px-2 py-1 rounded-lg bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold transition-colors">+5m</button>
+            </div>
+          </div>
+
+          <button 
+            type="button" 
+            id="btnToggleCardio" 
+            class="px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 ${isCompleted 
+              ? 'bg-emerald-500 hover:bg-emerald-600 text-slate-950' 
+              : 'bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 hover:brightness-110'}">
+            <span>${isCompleted ? '✓ Cardio Registrado' : '⚡ Marcar Cardio Completado'}</span>
+          </button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+// --------------------------------------------------------------------------
+// MANEJO DE EVENTOS (ZERO JUMP & ZERO FLICKER)
+// --------------------------------------------------------------------------
 function attachWorkoutEvents(container, currentDayId) {
-  // Cambio de día en tabs
+  // Cambio de día en tabs (vista previa)
   container.querySelectorAll('.day-tab-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', () => {
       const day = btn.getAttribute('data-day');
       state.setSelectedDay(day);
     });
@@ -260,6 +563,20 @@ function attachWorkoutEvents(container, currentDayId) {
     });
   });
 
+  // Expandir editor en ejercicios completados
+  container.querySelectorAll('.btn-expand-completed').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIndex = btn.getAttribute('data-ex');
+      const editorEl = document.getElementById(`completed-editor-${exIndex}`);
+      const arrowEl = document.getElementById(`arrow-completed-${exIndex}`);
+      if (editorEl) {
+        const isHidden = editorEl.classList.contains('hidden');
+        editorEl.classList.toggle('hidden');
+        if (arrowEl) arrowEl.textContent = isHidden ? '▲' : '▼';
+      }
+    });
+  });
+
   // Iniciar Sesión de Entrenamiento
   const btnStart = container.querySelector('#btnStartWorkout');
   if (btnStart) {
@@ -273,8 +590,8 @@ function attachWorkoutEvents(container, currentDayId) {
   if (btnFinish) {
     btnFinish.addEventListener('click', () => {
       if (confirm('¿Terminar y guardar la sesión de hoy?')) {
-        const saved = state.finishWorkout();
-        alert(`¡Excelente trabajo, Michael! Sesión guardada en tu historial.`);
+        state.finishWorkout();
+        alert('¡Excelente trabajo, Michael! Sesión guardada en tu historial.');
       }
     });
   }
@@ -289,41 +606,89 @@ function attachWorkoutEvents(container, currentDayId) {
     });
   }
 
-  // Inputs de peso y reps
+  // Inputs de peso y reps (GUARDADO SILENCIOSO: no re-renderiza ni cierra teclado)
   container.querySelectorAll('.input-set-field').forEach(input => {
-    input.addEventListener('change', (e) => {
+    input.addEventListener('change', () => {
       const exIndex = parseInt(input.getAttribute('data-ex'));
       const setIndex = parseInt(input.getAttribute('data-set'));
       const field = input.getAttribute('data-field');
-      state.updateSet(exIndex, setIndex, field, input.value);
+      state.updateSet(exIndex, setIndex, field, input.value, false);
     });
   });
 
-  // Botones +/-
+  // Botones +/- (ACTUALIZACIÓN DIRECTA EN EL DOM: Cero scroll jump, cero flicker)
   container.querySelectorAll('.btn-step').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
       const setIndex = parseInt(btn.getAttribute('data-set'));
       const field = btn.getAttribute('data-field');
       const delta = parseFloat(btn.getAttribute('data-delta'));
-      
-      const currentVal = parseFloat(state.activeWorkout.exercises[exIndex].sets[setIndex][field]) || 0;
-      const newVal = Math.max(0, currentVal + delta);
-      state.updateSet(exIndex, setIndex, field, newVal);
+
+      const input = btn.parentElement.querySelector(`input[data-field="${field}"]`);
+      if (input) {
+        const currentVal = parseFloat(input.value) || 0;
+        const newVal = Math.max(0, currentVal + delta);
+        const formattedVal = Number.isInteger(newVal) ? newVal : Math.round(newVal * 10) / 10;
+        input.value = formattedVal;
+        // Guardar silenciosamente en el estado y localStorage
+        state.updateSet(exIndex, setIndex, field, formattedVal, false);
+      }
     });
   });
 
-  // Toggle de Serie Completada (Dispara el Temporizador de Descanso de 90s)
+  // Toggle de Serie Completada
   container.querySelectorAll('.btn-toggle-set').forEach(btn => {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
       const setIndex = parseInt(btn.getAttribute('data-set'));
-      const isNowCompleted = state.toggleSetCompleted(exIndex, setIndex);
+      const ex = state.activeWorkout.exercises[exIndex];
+      const willBeCompleted = !ex.sets[setIndex].completed;
 
-      if (isNowCompleted) {
-        // Iniciar temporizador de descanso de 90s
+      // Actualizar en el estado silenciosamente
+      state.toggleSetCompleted(exIndex, setIndex, false);
+
+      if (willBeCompleted) {
+        // Disparar temporizador flotante de 90s
         timer.start(90);
       }
+
+      // Verificar si el estado global del ejercicio cambió (de pendiente a 100% completado, o viceversa)
+      const allCompletedNow = ex.sets.every(s => s.completed);
+
+      if (allCompletedNow || !willBeCompleted) {
+        // El ejercicio cambió de categoría (pasa a Completados abajo o regresa a Pendientes)
+        // Re-renderizar módulo preservando la posición exacta de scroll
+        renderWorkoutModule(container, true);
+      } else {
+        // Solo actualizar el botón y la fila en el DOM directamente sin re-renderizar la página
+        btn.textContent = willBeCompleted ? '✓' : '○';
+        const row = btn.closest('.set-row');
+        if (willBeCompleted) {
+          btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm');
+          btn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
+          if (row) {
+            row.classList.add('bg-emerald-500/10', 'border-emerald-500/20');
+            row.classList.remove('bg-[var(--card)]');
+          }
+        } else {
+          btn.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-sm');
+          btn.classList.add('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
+          if (row) {
+            row.classList.remove('bg-emerald-500/10', 'border-emerald-500/20');
+            row.classList.add('bg-[var(--card)]');
+          }
+        }
+      }
+    });
+  });
+
+  // Botón "✓ Marcar todo listo" (Completa todas las series del ejercicio de un toque y lo baja a completados)
+  container.querySelectorAll('.btn-complete-all-sets').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIndex = parseInt(btn.getAttribute('data-ex'));
+      state.completeAllSetsOfExercise(exIndex);
+      timer.start(90);
+      renderWorkoutModule(container, true);
     });
   });
 
@@ -332,6 +697,39 @@ function attachWorkoutEvents(container, currentDayId) {
     btn.addEventListener('click', () => {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
       state.addSetToExercise(exIndex);
+      renderWorkoutModule(container, true);
     });
   });
+
+  // Controles de Cardio (Duración +/- y Toggle Completado)
+  const btnCardioMinus = container.querySelector('#btnCardioMinus');
+  const btnCardioPlus = container.querySelector('#btnCardioPlus');
+  const cardioDisplay = container.querySelector('#cardioMinutesDisplay');
+  const btnToggleCardio = container.querySelector('#btnToggleCardio');
+
+  if (btnCardioMinus && cardioDisplay) {
+    btnCardioMinus.addEventListener('click', () => {
+      let mins = state.activeWorkout.cardioMinutes || 20;
+      mins = Math.max(5, mins - 5);
+      state.setCardioMinutes(mins);
+      cardioDisplay.textContent = `${mins} min`;
+    });
+  }
+
+  if (btnCardioPlus && cardioDisplay) {
+    btnCardioPlus.addEventListener('click', () => {
+      let mins = state.activeWorkout.cardioMinutes || 20;
+      mins = Math.min(60, mins + 5);
+      state.setCardioMinutes(mins);
+      cardioDisplay.textContent = `${mins} min`;
+    });
+  }
+
+  if (btnToggleCardio) {
+    btnToggleCardio.addEventListener('click', () => {
+      const currentMins = state.activeWorkout.cardioMinutes || 20;
+      state.toggleCardioCompleted(currentMins);
+      renderWorkoutModule(container, true);
+    });
+  }
 }
