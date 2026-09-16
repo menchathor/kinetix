@@ -464,6 +464,52 @@ export const INITIAL_DATA = {
     }
   },
 
+  schedule: [
+    { dayIndex: 1, id: "torso1", type: "workout", name: "Torso 1", dayName: "Lunes", shortDay: "Lun", icon: "🏋️" },
+    { dayIndex: 2, id: "pierna1", type: "workout", name: "Pierna 1", dayName: "Martes", shortDay: "Mar", icon: "🦵" },
+    { dayIndex: 3, id: "rest_wednesday", type: "rest", name: "Descanso", dayName: "Miércoles", shortDay: "Mié", icon: "🚴" },
+    { dayIndex: 4, id: "torso2", type: "workout", name: "Torso 2", dayName: "Jueves", shortDay: "Jue", icon: "💪" },
+    { dayIndex: 5, id: "pierna2", type: "workout", name: "Pierna 2", dayName: "Viernes", shortDay: "Vie", icon: "🔥" },
+    { dayIndex: 6, id: "rest_saturday", type: "rest", name: "Descanso", dayName: "Sábado", shortDay: "Sáb", icon: "🌿" },
+    { dayIndex: 0, id: "rest_sunday", type: "rest", name: "Descanso", dayName: "Domingo", shortDay: "Dom", icon: "🔋" }
+  ],
+
+  restDays: {
+    rest_wednesday: {
+      id: "rest_wednesday",
+      dayName: "Miércoles",
+      title: "Recuperación Activa & Regeneración",
+      tagline: "¡Hoy el músculo crece en el descanso! 🛋️🚴",
+      description: "Tus fibras musculares y tu sistema nervioso necesitan una tregua tras las intensas sesiones de Torso 1 y Pierna 1. Descansar hoy permite recargar el glucógeno y evitar picos de cortisol que frenen la recomposición.",
+      activityRecommendation: "20 a 30 minutos de Bicicleta Suave o Paseo a ritmo relajado en Zona 1 – Zona 2 (~100-115 lpm). Ayuda a drenar las piernas, llevar nutrientes a las articulaciones y acelerar la recuperación sin fatiga.",
+      clinicalTip: "Tu tiroides agradece este balance: menor sobreentrenamiento equivale a una conversión hormonal T4 → T3 mucho más eficiente.",
+      image: "assets/images/rest_day_hero.jpg",
+      suggestedMinutes: 25
+    },
+    rest_saturday: {
+      id: "rest_saturday",
+      dayName: "Sábado",
+      title: "Descanso de Fin de Semana: Relax & Desconexión",
+      tagline: "¡Misión Semanal Cumplida! 4 de 4 en el Gimnasio 🏆",
+      description: "Completaste las 4 sesiones de sobrecarga progresiva de la semana. Hoy tu prioridad es descansar, despejar la mente y dejar que tu musculatura se repare.",
+      activityRecommendation: "Paseo al aire libre, bicicleta suave o estiramientos de cadera y movilidad articular.",
+      clinicalTip: "Mantén tu hidratación y nutrición ricas en proteína para consolidar las adaptaciones musculares de la semana.",
+      image: "assets/images/rest_day_hero.jpg",
+      suggestedMinutes: 30
+    },
+    rest_sunday: {
+      id: "rest_sunday",
+      dayName: "Domingo",
+      title: "Recarga Total: Preparación para la Semana",
+      tagline: "Modo Zen: Baterías al 100% para Mañana 🔋✨",
+      description: "El descanso dominical es parte de la estrategia, no una pausa improvisada. Duerme bien, hidrátate y recarga energías para volver mañana lunes a las 18:00 hrs con toda la fuerza.",
+      activityRecommendation: "Descanso placentero, desconexión y sueño reparador.",
+      clinicalTip: "Prepara tu botellón de agua y deja listo tu bolso para empezar con todo la semana mañana a las 18:00 hrs.",
+      image: "assets/images/rest_day_hero.jpg",
+      suggestedMinutes: 20
+    }
+  },
+
   nutrition: {
     targetCalories: 1860,
     targetProtein: 145,

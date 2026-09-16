@@ -2,11 +2,27 @@
 import { db } from './services/db.js';
 import { INITIAL_DATA } from './data/initialData.js';
 
+// Función para detectar el identificador del día actual (auto-selección inteligente)
+export function getTodayDayId(date = new Date()) {
+  const day = date.getDay(); // 0: Dom, 1: Lun, 2: Mar, 3: Mié, 4: Jue, 5: Vie, 6: Sáb
+  const map = {
+    1: 'torso1',
+    2: 'pierna1',
+    3: 'rest_wednesday',
+    4: 'torso2',
+    5: 'pierna2',
+    6: 'rest_saturday',
+    0: 'rest_sunday'
+  };
+  return map[day] || 'torso1';
+}
+
 class AppState {
   constructor() {
     this.activeTab = 'workout';
-    this.selectedDay = 'torso1';
     this.activeWorkout = db.getActiveSession(); // Puede ser null o una sesión en progreso
+    this.todayDayId = getTodayDayId();
+    this.selectedDay = this.activeWorkout ? this.activeWorkout.routineId : this.todayDayId;
 
     // Migración automática: Si hay una sesión activa abierta sin el ejercicio de cardio, integrarlo de inmediato
     if (this.activeWorkout && this.activeWorkout.routineId) {

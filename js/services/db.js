@@ -65,6 +65,7 @@ export class StorageService {
 
     if (logs.length === 0) {
       localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify([baselineSession]));
+      logs = [baselineSession];
     } else {
       const baseIdx = logs.findIndex(l => l.id === 'session_baseline_20260910');
       if (baseIdx >= 0) {
@@ -78,6 +79,38 @@ export class StorageService {
         });
         localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
       }
+    }
+
+    // Migración transparente de datos previos con clave 'smartfit_*'
+    try {
+      const legacyWorkoutRaw = localStorage.getItem('smartfit_workout_logs');
+      if (legacyWorkoutRaw) {
+        const oldLogs = JSON.parse(legacyWorkoutRaw) || [];
+        if (oldLogs.length > 0) {
+          const currentIds = new Set(logs.map(l => l.id || l.sessionId));
+          let migrated = 0;
+          for (const oldLog of oldLogs) {
+            const id = oldLog.id || oldLog.sessionId;
+            if (id && !currentIds.has(id)) {
+              logs.push(oldLog);
+              migrated++;
+            }
+          }
+          if (migrated > 0) {
+            logs.sort((a, b) => new Date(b.date || b.startTime || 0) - new Date(a.date || a.startTime || 0));
+            localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
+            console.log(`[DB] Migrados con éxito ${migrated} entrenamientos desde smartfit_workout_logs`);
+          }
+        }
+      }
+      if (localStorage.getItem('smartfit_measurements') && !localStorage.getItem(KEYS.MEASUREMENTS)) {
+        localStorage.setItem(KEYS.MEASUREMENTS, localStorage.getItem('smartfit_measurements'));
+      }
+      if (localStorage.getItem('smartfit_active_session') && !localStorage.getItem(KEYS.ACTIVE_SESSION)) {
+        localStorage.setItem(KEYS.ACTIVE_SESSION, localStorage.getItem('smartfit_active_session'));
+      }
+    } catch (migErr) {
+      console.warn('[DB] Nota en migración legacy:', migErr);
     }
   }
 

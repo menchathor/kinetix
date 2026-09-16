@@ -7,7 +7,27 @@ import { timer } from '../services/timer.js';
 export function renderWorkoutModule(container, preserveScroll = false) {
   const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
+  const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const todayName = daysOfWeek[new Date().getDay()];
   const currentDayId = isLive ? state.activeWorkout.routineId : state.selectedDay;
+  const isRestDay = !isLive && INITIAL_DATA.restDays && !!INITIAL_DATA.restDays[currentDayId];
+
+  // Si se ha seleccionado un día de descanso y no hay entrenamiento en vivo, mostrar pantalla de descanso
+  if (isRestDay) {
+    const restDay = INITIAL_DATA.restDays[currentDayId];
+    container.innerHTML = `
+      <div class="space-y-4 max-w-3xl mx-auto pb-24">
+        <!-- Selector Semanal con indicador HOY -->
+        ${renderWeeklyScheduleSelector(currentDayId, todayName)}
+
+        <!-- Pantalla Divertida de Descanso & Regeneración -->
+        ${renderRestDayScreen(restDay)}
+      </div>
+    `;
+    attachRestDayEvents(container);
+    return;
+  }
+
   const routine = INITIAL_DATA.routines[currentDayId] || INITIAL_DATA.routines.torso1;
 
   // Clasificar ejercicios en pendientes y completados si la sesión está en vivo
@@ -40,23 +60,8 @@ export function renderWorkoutModule(container, preserveScroll = false) {
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
       
-      <!-- Selector de Días (Solo visible cuando no hay sesión en curso) -->
-      ${!isLive ? `
-        <div class="bg-[var(--card)] p-2 rounded-2xl border border-[var(--border)] shadow-xs">
-          <div class="grid grid-cols-4 gap-1.5" id="dayTabs">
-            ${Object.values(INITIAL_DATA.routines).map(r => `
-              <button 
-                data-day="${r.id}" 
-                class="day-tab-btn py-2 px-1 text-center rounded-xl transition-all ${r.id === currentDayId 
-                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm' 
-                  : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] font-medium'}">
-                <span class="text-xs block font-bold">${r.name}</span>
-                <span class="text-[10px] block opacity-80">${r.dayName}</span>
-              </button>
-            `).join('')}
-          </div>
-        </div>
-      ` : `
+      <!-- Selector de Días Semanal (Solo visible cuando no hay sesión en curso) -->
+      ${!isLive ? renderWeeklyScheduleSelector(currentDayId, todayName) : `
         <!-- Banner de Sesión en Vivo -->
         <div class="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 rounded-2xl p-4 shadow-sm">
           <div class="flex items-center justify-between">
@@ -806,4 +811,172 @@ function attachWorkoutEvents(container, currentDayId) {
       renderWorkoutModule(container, true);
     });
   });
+}
+
+// --------------------------------------------------------------------------
+// SELECTOR DE PROGRAMACIÓN SEMANAL (CON INDICADOR DE "HOY")
+// --------------------------------------------------------------------------
+function renderWeeklyScheduleSelector(currentDayId, todayName) {
+  const schedule = INITIAL_DATA.schedule || [];
+  return `
+    <div class="bg-[var(--card)] p-2.5 rounded-2xl border border-[var(--border)] shadow-xs">
+      <div class="flex items-center justify-between px-1 mb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs">📅</span>
+          <span class="text-xs font-bold text-[var(--foreground)]">Programación Semanal</span>
+        </div>
+        <span class="text-[10px] font-extrabold text-amber-500 bg-amber-500/15 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+          Hoy es ${todayName}
+        </span>
+      </div>
+      <div class="grid grid-cols-7 gap-1 sm:gap-1.5" id="dayTabs">
+        ${schedule.map(item => {
+          const isSelected = item.id === currentDayId;
+          const isToday = item.id === state.todayDayId;
+          return `
+            <button 
+              data-day="${item.id}" 
+              class="day-tab-btn relative py-2 px-0.5 text-center rounded-xl transition-all flex flex-col items-center justify-center ${
+                isSelected 
+                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm ring-2 ring-amber-400/40' 
+                  : 'text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] font-medium'
+              }">
+              ${isToday ? `
+                <span class="absolute -top-1.5 px-1 py-0.2 bg-emerald-500 text-[8px] font-black text-slate-950 rounded-full shadow-xs leading-none">
+                  HOY
+                </span>
+              ` : ''}
+              <span class="text-[10px] uppercase font-extrabold block ${isSelected ? 'text-slate-950' : 'text-[var(--muted-foreground)]'}">${item.shortDay}</span>
+              <span class="text-xs my-0.5 block">${item.icon}</span>
+              <span class="text-[9px] block leading-tight truncate max-w-full px-0.5 font-bold ${isSelected ? 'text-slate-950' : 'opacity-75'}">
+                ${item.type === 'workout' ? item.name.replace(' ', '') : 'Relax'}
+              </span>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// --------------------------------------------------------------------------
+// PANTALLA DIVERTIDA DE DÍA DE DESCANSO & REGENERACIÓN ACTIVA
+// --------------------------------------------------------------------------
+function renderRestDayScreen(restDay) {
+  return `
+    <div class="bg-[var(--card)] rounded-3xl border border-[var(--border)] overflow-hidden shadow-sm">
+      <!-- Ilustración divertida de cabecera -->
+      <div class="relative w-full aspect-[16/10] sm:aspect-[2/1] overflow-hidden bg-gradient-to-b from-amber-500/10 to-transparent">
+        <img 
+          src="${restDay.image || 'assets/images/rest_day_hero.jpg'}" 
+          alt="Día de descanso Kinetix" 
+          class="w-full h-full object-cover object-center"
+        />
+        <div class="absolute inset-0 bg-gradient-to-t from-[var(--card)] via-transparent to-transparent"></div>
+        <div class="absolute bottom-3 left-4 right-4">
+          <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-extrabold uppercase tracking-wider backdrop-blur-md">
+            🛋️ ${restDay.dayName} • ${restDay.title}
+          </span>
+          <h2 class="text-lg sm:text-xl font-black text-[var(--foreground)] mt-1 drop-shadow-sm">
+            ${restDay.tagline}
+          </h2>
+        </div>
+      </div>
+
+      <div class="p-4 space-y-4">
+        <p class="text-xs text-[var(--muted-foreground)] leading-relaxed">
+          ${restDay.description}
+        </p>
+
+        <!-- TARJETA: ACTIVIDAD RECOMENDADA (Bicicleta suave / Regeneración) -->
+        <div class="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-xs">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-lg">🚴</span>
+            <h3 class="font-bold text-amber-500 text-sm">Opción Activa: Bicicleta Suave o Paseo</h3>
+          </div>
+          <p class="text-xs text-[var(--foreground)] leading-relaxed">
+            ${restDay.activityRecommendation}
+          </p>
+
+          <!-- Cronómetro Rápido de Recuperación -->
+          <div class="mt-3 pt-3 border-t border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div class="text-[11px] text-[var(--muted-foreground)]">
+              <span>Objetivo sugerido:</span>
+              <b class="text-[var(--foreground)]">${restDay.suggestedMinutes} minutos</b> en Zona 1 – Zona 2
+            </div>
+            <button id="btnStartRestCardio" data-minutes="${restDay.suggestedMinutes}" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5">
+              <span>⏱️ Iniciar Temporizador (${restDay.suggestedMinutes} min)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- TIP CLÍNICO: CONVERSIÓN HORMONAL & HIPOTIROIDISMO -->
+        <div class="p-3.5 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs flex items-start gap-2.5">
+          <span class="text-base shrink-0 mt-0.5">🧬</span>
+          <div>
+            <h4 class="font-bold text-purple-400 text-xs mb-0.5">Enfoque Clínico: Protección Tiroidea</h4>
+            <p class="text-[11px] text-[var(--muted-foreground)] leading-relaxed">
+              ${restDay.clinicalTip}
+            </p>
+          </div>
+        </div>
+
+        <!-- BOTONES ALTERNATIVOS SI DESEA ENTRENAR FUERZA HOY -->
+        <div class="pt-3 border-t border-[var(--border)]">
+          <p class="text-[11px] font-semibold text-[var(--muted-foreground)] mb-2.5 text-center">
+            ¿Cambiaste tus días de gimnasio y prefieres entrenar fuerza hoy?
+          </p>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button data-switch-routine="torso1" class="btn-switch-routine p-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs font-bold text-[var(--foreground)] border border-[var(--border)] text-center transition-all">
+              🏋️ Torso 1 (Lunes)
+            </button>
+            <button data-switch-routine="pierna1" class="btn-switch-routine p-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs font-bold text-[var(--foreground)] border border-[var(--border)] text-center transition-all">
+              🦵 Pierna 1 (Martes)
+            </button>
+            <button data-switch-routine="torso2" class="btn-switch-routine p-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs font-bold text-[var(--foreground)] border border-[var(--border)] text-center transition-all">
+              💪 Torso 2 (Jueves)
+            </button>
+            <button data-switch-routine="pierna2" class="btn-switch-routine p-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs font-bold text-[var(--foreground)] border border-[var(--border)] text-center transition-all">
+              🔥 Pierna 2 (Viernes)
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
+
+// --------------------------------------------------------------------------
+// EVENTOS PARA LA PANTALLA DE DESCANSO
+// --------------------------------------------------------------------------
+function attachRestDayEvents(container) {
+  // Cambio de día en tabs
+  container.querySelectorAll('.day-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const day = btn.getAttribute('data-day');
+      state.setSelectedDay(day);
+    });
+  });
+
+  // Botones para cambiar a rutina de fuerza si prefiere entrenar hoy
+  container.querySelectorAll('.btn-switch-routine').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const routineId = btn.getAttribute('data-switch-routine');
+      state.setSelectedDay(routineId);
+    });
+  });
+
+  // Botón para iniciar temporizador de cardio regenerativo
+  const btnRestCardio = container.querySelector('#btnStartRestCardio');
+  if (btnRestCardio) {
+    btnRestCardio.addEventListener('click', () => {
+      const minutes = parseInt(btnRestCardio.getAttribute('data-minutes')) || 25;
+      timer.start(minutes * 60);
+      const timerEl = document.getElementById('floatingTimer');
+      if (timerEl) {
+        timerEl.classList.remove('hidden');
+      }
+    });
+  }
 }
