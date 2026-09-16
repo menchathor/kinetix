@@ -46,7 +46,7 @@ class ConvexService {
         body: JSON.stringify({
           path,
           args,
-          format: 'clean_json',
+          format: 'json',
         }),
       });
 
@@ -57,8 +57,13 @@ class ConvexService {
       }
 
       const result = await response.json();
+      if (result.status === 'error') {
+        console.warn(`[Convex] Error en mutación ${path}:`, result.errorMessage);
+        return { success: false, error: result.errorMessage };
+      }
+
       this.lastSyncTime = new Date().toISOString();
-      this.notifyListeners('synced', { path, result });
+      this.notifyListeners('synced', { path, result: result.value });
       return { success: true, data: result.value !== undefined ? result.value : result };
     } catch (err) {
       console.warn(`[Convex] Excepción en mutación ${path}:`, err);
@@ -81,7 +86,7 @@ class ConvexService {
         body: JSON.stringify({
           path,
           args,
-          format: 'clean_json',
+          format: 'json',
         }),
       });
 
@@ -92,6 +97,11 @@ class ConvexService {
       }
 
       const result = await response.json();
+      if (result.status === 'error') {
+        console.warn(`[Convex] Error en query ${path}:`, result.errorMessage);
+        return { success: false, error: result.errorMessage };
+      }
+
       return { success: true, data: result.value !== undefined ? result.value : result };
     } catch (err) {
       console.warn(`[Convex] Excepción en query ${path}:`, err);
