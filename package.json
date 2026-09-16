@@ -1,0 +1,24 @@
+{
+  "name": "kinetix",
+  "version": "1.0.0",
+  "description": "Aplicación web progresiva (**PWA**) modular y *Mobile-First* para el seguimiento del entrenamiento de fuerza en máquinas, registro de sobrecarga progresiva, temporizador de descanso, plan nutricional clínico (hipotiroidismo medicado) y analíticas de evolución corporal.",
+  "main": "sw.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/menchathor/kinetix.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/menchathor/kinetix/issues"
+  },
+  "homepage": "https://github.com/menchathor/kinetix#readme",
+  "devDependencies": {
+    "convex": "^1.45.0"
+  }
+}

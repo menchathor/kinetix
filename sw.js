@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (Cache & Offline Support)
-const CACHE_NAME = 'kinetix-v1.4';
+const CACHE_NAME = 'kinetix-v1.5';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -15,9 +15,11 @@ const ASSETS_TO_CACHE = [
   './assets/images/smartfit_cable_arms_1789138284942.jpg',
   './assets/images/smartfit_leg_press_1789138185290.jpg',
   './assets/images/smartfit_leg_extension_1789138265921.jpg',
+  './js/config.js',
   './js/app.js',
   './js/state.js',
   './js/data/initialData.js',
+  './js/services/convex.js',
   './js/services/db.js',
   './js/services/timer.js',
   './js/modules/workout.js',
@@ -55,6 +57,7 @@ self.addEventListener('activate', (event) => {
 // Estrategia Network First con fallback a Cache
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('convex.cloud')) return;
 
   event.respondWith(
     fetch(event.request)

@@ -1,12 +1,13 @@
-// Servicio de Abstracción de Base de Datos (Local-First + Cloud Ready)
+// Servicio de Abstracción de Base de Datos (Local-First + Convex Cloud)
 import { INITIAL_DATA } from '../data/initialData.js';
+import { convex } from './convex.js';
 
 const KEYS = {
-  SETTINGS: 'smartfit_settings',
-  WORKOUT_LOGS: 'smartfit_workout_logs',
-  ACTIVE_SESSION: 'smartfit_active_session',
-  DAILY_NUTRITION: 'smartfit_daily_nutrition',
-  MEASUREMENTS: 'smartfit_measurements'
+  SETTINGS: 'kinetix_settings',
+  WORKOUT_LOGS: 'kinetix_workout_logs',
+  ACTIVE_SESSION: 'kinetix_active_session',
+  DAILY_NUTRITION: 'kinetix_daily_nutrition',
+  MEASUREMENTS: 'kinetix_measurements'
 };
 
 export class StorageService {
@@ -22,10 +23,6 @@ export class StorageService {
     // Inicializar settings
     if (!localStorage.getItem(KEYS.SETTINGS)) {
       const defaultSettings = {
-        cloudProvider: 'none', // 'none' | 'supabase' | 'firebase'
-        supabaseUrl: '',
-        supabaseKey: '',
-        firebaseConfig: '',
         timerDurationSeconds: 90,
         soundEnabled: true,
         vibrationEnabled: true,
@@ -109,8 +106,11 @@ export class StorageService {
     localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
     this.clearActiveSession();
 
-    // Intentar sincronizar con nube si está configurada
-    this.syncToCloud('workout', session);
+    // Sincronizar en segundo plano con Convex Cloud
+    convex.syncWorkout(session).catch(err => {
+      console.warn('[Convex] Error sincronizando entrenamiento:', err);
+    });
+
     return session;
   }
 
@@ -118,6 +118,11 @@ export class StorageService {
     let logs = this.getWorkoutLogs();
     logs = logs.filter(l => l.id !== sessionId);
     localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
+
+    // Eliminar en Convex Cloud
+    convex.mutation('workouts:deleteSession', { sessionId }).catch(err => {
+      console.warn('[Convex] Error eliminando entrenamiento en la nube:', err);
+    });
   }
 
   // Obtener el último registro de un ejercicio específico para mostrar referencia previa
@@ -190,6 +195,10 @@ export class StorageService {
   saveTodayNutrition(data) {
     const key = this.getTodayNutritionKey();
     localStorage.setItem(key, JSON.stringify(data));
+    const today = data.date || new Date().toISOString().split('T')[0];
+    convex.syncNutrition(today, data).catch(err => {
+      console.warn('[Convex] Error sincronizando nutrición:', err);
+    });
   }
 
   // --- MEDICIONES CORPORALES ---
@@ -206,7 +215,9 @@ export class StorageService {
     measurement.id = 'meas_' + Date.now();
     list.unshift(measurement);
     localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(list));
-    this.syncToCloud('measurement', measurement);
+    convex.syncMeasurement(measurement).catch(err => {
+      console.warn('[Convex] Error sincronizando medición:', err);
+    });
     return measurement;
   }
 
@@ -223,28 +234,56 @@ export class StorageService {
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
   }
 
-  // Sincronización en segundo plano con Supabase / Firebase
-  async syncToCloud(type, payload) {
-    const settings = this.getSettings();
-    if (settings.cloudProvider === 'supabase' && settings.supabaseUrl && settings.supabaseKey) {
-      try {
-        // Enviar a Endpoint REST de Supabase directamente vía fetch
-        const table = type === 'workout' ? 'workouts' : 'measurements';
-        const url = `${settings.supabaseUrl}/rest/v1/${table}`;
-        await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': settings.supabaseKey,
-            'Authorization': `Bearer ${settings.supabaseKey}`,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify(payload)
-        });
-        console.log(`[Cloud Sync] Sincronizado ${type} en Supabase`);
-      } catch (err) {
-        console.warn(`[Cloud Sync] Error sincronizando a Supabase (offline):`, err);
+  // Sincronizar todo el historial local a Convex Cloud
+  async syncAllToConvex() {
+    const workouts = this.getWorkoutLogs();
+    const measurements = this.getMeasurements();
+    return await convex.syncAllLocalData(workouts, measurements);
+  }
+
+  // Descargar y fusionar datos desde Convex Cloud hacia localStorage
+  async pullFromConvex() {
+    try {
+      const [cloudWorkoutsRes, cloudMeasRes] = await Promise.all([
+        convex.fetchCloudWorkouts(),
+        convex.fetchCloudMeasurements()
+      ]);
+
+      let importedWorkouts = 0;
+      let importedMeas = 0;
+
+      if (cloudWorkoutsRes.success && Array.isArray(cloudWorkoutsRes.data)) {
+        const localLogs = this.getWorkoutLogs();
+        const localIds = new Set(localLogs.map(l => l.id || l.sessionId));
+        
+        for (const cw of cloudWorkoutsRes.data) {
+          const id = cw.sessionId || cw.id;
+          if (!localIds.has(id)) {
+            localLogs.push(cw);
+            importedWorkouts++;
+          }
+        }
+        localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(localLogs));
       }
+
+      if (cloudMeasRes.success && Array.isArray(cloudMeasRes.data)) {
+        const localMeas = this.getMeasurements();
+        const localDates = new Set(localMeas.map(m => m.date));
+
+        for (const cm of cloudMeasRes.data) {
+          if (!localDates.has(cm.date)) {
+            localMeas.push(cm);
+            importedMeas++;
+          }
+        }
+        localMeas.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(localMeas));
+      }
+
+      return { success: true, importedWorkouts, importedMeas };
+    } catch (err) {
+      console.warn('[Convex] Error al restaurar desde la nube:', err);
+      return { success: false, error: err.message };
     }
   }
 
