@@ -7,7 +7,8 @@ const KEYS = {
   WORKOUT_LOGS: 'kinetix_workout_logs',
   ACTIVE_SESSION: 'kinetix_active_session',
   DAILY_NUTRITION: 'kinetix_daily_nutrition',
-  MEASUREMENTS: 'kinetix_measurements'
+  MEASUREMENTS: 'kinetix_measurements',
+  CUSTOM_WEIGHTS: 'kinetix_custom_weights'
 };
 
 export class StorageService {
@@ -320,13 +321,155 @@ export class StorageService {
     }
   }
 
+  // --- GESTIÓN DE PESOS BASE PERSONALIZADOS & BITÁCORA ---
+  getCustomWeights() {
+    try {
+      return JSON.parse(localStorage.getItem(KEYS.CUSTOM_WEIGHTS)) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  getCustomWeight(exerciseId) {
+    const weights = this.getCustomWeights();
+    return weights[exerciseId] !== undefined ? weights[exerciseId] : null;
+  }
+
+  setCustomWeight(exerciseId, weight) {
+    const weights = this.getCustomWeights();
+    weights[exerciseId] = Number(weight) || 0;
+    localStorage.setItem(KEYS.CUSTOM_WEIGHTS, JSON.stringify(weights));
+    return weights;
+  }
+
+  // Obtener estadísticas de evolución y bitácora para un ejercicio específico
+  getExerciseEvolutionStats(exerciseId) {
+    const logs = this.getWorkoutLogs();
+    const customWeights = this.getCustomWeights();
+    let baselineWeight = null;
+    let prWeight = 0;
+    let prDate = null;
+    let latestWeight = null;
+    let latestDate = null;
+    let totalCompletedSets = 0;
+    let totalSessions = 0;
+    const history = [];
+
+    // Recorrer los entrenamientos cronológicamente (del más antiguo al más reciente)
+    const chronologicalLogs = [...logs].reverse();
+
+    for (const session of chronologicalLogs) {
+      if (!session.exercises || !Array.isArray(session.exercises)) continue;
+      const ex = session.exercises.find(e => e.exerciseId === exerciseId);
+      if (!ex || !ex.sets || ex.sets.length === 0) continue;
+
+      const validSets = ex.sets.filter(s => s.completed);
+      if (validSets.length > 0) {
+        totalSessions++;
+        totalCompletedSets += validSets.length;
+        const maxSetWeight = Math.max(...validSets.map(s => Number(s.weight) || 0));
+
+        if (baselineWeight === null && maxSetWeight > 0) {
+          baselineWeight = maxSetWeight;
+        }
+
+        if (maxSetWeight > prWeight) {
+          prWeight = maxSetWeight;
+          prDate = session.date || session.startTime;
+        }
+
+        latestWeight = maxSetWeight;
+        latestDate = session.date || session.startTime;
+
+        history.push({
+          date: session.date || session.startTime,
+          routineName: session.routineName || 'Sesión',
+          sets: validSets.map(s => ({
+            setNumber: s.setNumber,
+            weight: Number(s.weight) || 0,
+            reps: Number(s.reps) || 0,
+            completed: s.completed,
+            rpe: s.rpe || ''
+          })),
+          bestWeight: maxSetWeight
+        });
+      }
+    }
+
+    // Si aún no hay baseline en sesiones, buscar en initialData
+    if (baselineWeight === null || baselineWeight === 0) {
+      for (const r of Object.values(INITIAL_DATA.routines)) {
+        const found = r.exercises?.find(e => e.id === exerciseId);
+        if (found && !isNaN(Number(found.baseWeight))) {
+          baselineWeight = Number(found.baseWeight);
+          break;
+        }
+      }
+    }
+
+    const configuredTarget = customWeights[exerciseId];
+    const currentWeight = configuredTarget !== undefined 
+      ? configuredTarget 
+      : (latestWeight || baselineWeight || 0);
+
+    const effectivePr = Math.max(prWeight, currentWeight, baselineWeight || 0);
+    const base = baselineWeight || currentWeight || 0;
+    const progressKg = base > 0 ? (effectivePr - base) : 0;
+    const progressPercent = base > 0 ? Math.round(((effectivePr - base) / base) * 100) : 0;
+
+    return {
+      exerciseId,
+      baselineWeight: base,
+      targetWeight: currentWeight,
+      prWeight: effectivePr,
+      prDate,
+      latestWeight,
+      latestDate,
+      totalSessions,
+      totalCompletedSets,
+      progressKg,
+      progressPercent,
+      history: history.reverse() // Más reciente primero para la UI
+    };
+  }
+
+  // Obtener consolidado de todas las variantes de fuerza del programa
+  getAllExercisesAnalytics() {
+    const uniqueExercisesMap = new Map();
+
+    Object.values(INITIAL_DATA.routines).forEach(routine => {
+      (routine.exercises || []).forEach(ex => {
+        if (!ex.isCardio && !uniqueExercisesMap.has(ex.id)) {
+          uniqueExercisesMap.set(ex.id, {
+            ...ex,
+            routineId: routine.id,
+            routineName: routine.name,
+            dayName: routine.dayName
+          });
+        }
+      });
+    });
+
+    const results = [];
+    uniqueExercisesMap.forEach((def, id) => {
+      const stats = this.getExerciseEvolutionStats(id);
+      results.push({
+        ...def,
+        stats
+      });
+    });
+
+    return results;
+  }
+
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.0',
+      version: '1.7',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),
+      customWeights: this.getCustomWeights(),
       workoutLogs: this.getWorkoutLogs(),
       measurements: this.getMeasurements()
     };
@@ -334,7 +477,7 @@ export class StorageService {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `smartfit_backup_${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `kinetix_backup_${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -345,6 +488,7 @@ export class StorageService {
       if (data.workoutLogs) localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(data.workoutLogs));
       if (data.measurements) localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(data.measurements));
       if (data.settings) localStorage.setItem(KEYS.SETTINGS, JSON.stringify(data.settings));
+      if (data.customWeights) localStorage.setItem(KEYS.CUSTOM_WEIGHTS, JSON.stringify(data.customWeights));
       return { success: true, count: data.workoutLogs?.length || 0 };
     } catch (e) {
       return { success: false, error: e.message };

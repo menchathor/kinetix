@@ -89,7 +89,10 @@ class AppState {
           };
         }
 
-        const suggestedWeight = prev ? prev.bestWeight : (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto' ? '' : ex.baseWeight);
+        const customWeight = db.getCustomWeight(ex.id);
+        const suggestedWeight = customWeight !== null
+          ? customWeight
+          : (prev ? prev.bestWeight : (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto' ? '' : ex.baseWeight));
 
         // Generar sets por defecto
         const setsCount = ex.defaultSets || 3;

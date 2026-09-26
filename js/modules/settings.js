@@ -7,6 +7,7 @@ import { CONFIG } from '../config.js';
 export function renderSettingsModule(container) {
   const settings = db.getSettings();
   const profile = INITIAL_DATA.profile;
+  const exercisesAnalytics = db.getAllExercisesAnalytics();
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -41,6 +42,50 @@ export function renderSettingsModule(container) {
             <span class="text-[var(--muted-foreground)]">Condición Clínica:</span>
             <span class="font-medium text-[var(--foreground)] text-right">${profile.condition}</span>
           </div>
+        </div>
+      </div>
+
+      <!-- GESTIÓN DE PESOS BASE Y BITÁCORA DE LOGROS -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🏆</span>
+            <h3 class="text-sm font-bold text-[var(--foreground)]">Bitácora de Fuerza & Pesos Base</h3>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            ${exercisesAnalytics.length} Máquinas
+          </span>
+        </div>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+          Administra el peso base objetivo para tus próximos entrenamientos y revisa tus logros de sobrecarga progresiva.
+        </p>
+
+        <!-- Filtros de Rutina -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none text-[11px]" id="exerciseFilterTabs">
+          <button data-filter="all" class="filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0">Todos (${exercisesAnalytics.length})</button>
+          <button data-filter="torso1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🏋️ Torso 1</button>
+          <button data-filter="pierna1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🦵 Pierna 1</button>
+          <button data-filter="torso2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">💪 Torso 2</button>
+          <button data-filter="pierna2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🔥 Pierna 2</button>
+        </div>
+
+        <!-- Buscador de ejercicio -->
+        <div class="relative my-2.5">
+          <input 
+            type="text" 
+            id="inputSearchExercise" 
+            placeholder="Buscar por ejercicio o músculo..." 
+            class="w-full text-xs py-2 pl-8 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors"
+          />
+          <span class="absolute left-2.5 top-2.5 text-xs text-[var(--muted-foreground)]">🔍</span>
+        </div>
+
+        <!-- Lista de Tarjetas de Ejercicios -->
+        <div class="space-y-3 mt-3" id="exerciseAnalyticsList">
+          ${renderExercisesAnalyticsList(exercisesAnalytics)}
+        </div>
+        <div id="noExercisesFoundMsg" class="hidden text-center py-6 text-xs text-[var(--muted-foreground)]">
+          No se encontraron ejercicios con ese filtro o búsqueda.
         </div>
       </div>
 
@@ -138,7 +183,160 @@ export function renderSettingsModule(container) {
     </div>
   `;
 
+
   attachSettingsEvents(container, settings);
+}
+
+// Renderiza cada tarjeta de ejercicio con su selector de peso y bitácora
+function renderExercisesAnalyticsList(exercises) {
+  if (!exercises || exercises.length === 0) {
+    return `<div class="p-4 text-center text-xs text-[var(--muted-foreground)]">No hay ejercicios registrados.</div>`;
+  }
+
+  return exercises.map(ex => {
+    const stats = ex.stats;
+    const progressBadge = stats.progressKg > 0
+      ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">🚀 +${stats.progressKg} kg (+${stats.progressPercent}%)</span>`
+      : stats.totalSessions > 0
+        ? `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">⚖️ En ritmo</span>`
+        : `<span class="inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] bg-[var(--accent)] px-2 py-0.5 rounded-full">Base inicial</span>`;
+
+    const keywords = `${ex.name} ${ex.targetMuscles || ''} ${ex.machineName || ''} ${ex.routineName || ''}`.toLowerCase();
+
+    return `
+      <div class="exercise-card-item bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 rounded-2xl p-3.5 border border-[var(--border)] transition-all" data-routine="${ex.routineId}" data-keywords="${keywords}">
+        <div class="flex items-start gap-3">
+          <!-- Miniatura precisa de la máquina -->
+          <div class="relative shrink-0">
+            <img 
+              src="${ex.image || './assets/images/smartfit_chest_press_1789138165787.jpg'}" 
+              alt="${ex.name}" 
+              class="w-16 h-16 rounded-xl object-cover border border-[var(--border)] bg-[var(--card)]"
+              onerror="this.src='./assets/images/smartfit_chest_press_1789138165787.jpg'"
+            />
+            <span class="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)]">
+              ${ex.dayName ? ex.dayName.substring(0, 3) : 'Día'}
+            </span>
+          </div>
+
+          <!-- Información del Ejercicio -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-1">
+              <div>
+                <h4 class="text-xs font-bold text-[var(--foreground)] truncate">${ex.name}</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)] truncate">${ex.targetMuscles || ex.machineName}</p>
+              </div>
+              <div>${progressBadge}</div>
+            </div>
+
+            <!-- Métricas rápidas: Base vs PR -->
+            <div class="flex items-center gap-3 mt-1.5 text-[10px] text-[var(--muted-foreground)]">
+              <span>Base: <strong class="text-[var(--foreground)]">${stats.baselineWeight > 0 ? stats.baselineWeight + ' kg' : 'Auto'}</strong></span>
+              <span>•</span>
+              <span>Récord PR: <strong class="text-amber-500">${stats.prWeight > 0 ? stats.prWeight + ' kg' : 'Por marcar'}</strong></span>
+              <span>•</span>
+              <span>Sesiones: <strong class="text-[var(--foreground)]">${stats.totalSessions}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Ajuste Interactivo de Peso Objetivo -->
+        <div class="mt-3 pt-2.5 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] font-medium text-[var(--foreground)]">Peso Siguiente Sesión:</span>
+            <div class="flex items-center gap-1">
+              <button 
+                type="button" 
+                data-id="${ex.id}" 
+                data-delta="-2.5" 
+                class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
+                title="Bajar 2.5 kg"
+              >−</button>
+              
+              <div class="relative flex items-center">
+                <input 
+                  type="number" 
+                  step="2.5" 
+                  min="0" 
+                  data-id="${ex.id}" 
+                  value="${stats.targetWeight}" 
+                  class="input-custom-weight w-16 text-center font-bold text-amber-500 bg-[var(--card)] border border-[var(--border)] rounded-lg py-1 text-xs outline-none focus:border-amber-500 transition-colors"
+                />
+                <span class="absolute right-1 text-[10px] text-[var(--muted-foreground)] pointer-events-none">kg</span>
+              </div>
+
+              <button 
+                type="button" 
+                data-id="${ex.id}" 
+                data-delta="2.5" 
+                class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
+                title="Subir 2.5 kg"
+              >+</button>
+            </div>
+            <span id="savedIndicator_${ex.id}" class="text-[10px] font-bold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
+          </div>
+
+          <!-- Botón Bitácora Desplegable -->
+          <button 
+            type="button" 
+            data-target="history_${ex.id}" 
+            class="btn-toggle-history text-[11px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-amber-500/10"
+          >
+            <span>📜 Bitácora (${stats.history.length})</span>
+            <span id="chevron_${ex.id}" class="text-[9px] transition-transform duration-200">▼</span>
+          </button>
+        </div>
+
+        <!-- Acordeón de Bitácora Histórica -->
+        <div id="history_${ex.id}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+          ${renderExerciseHistoryAccordion(stats)}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Renderiza la tabla/lista de sesiones históricas para un ejercicio
+function renderExerciseHistoryAccordion(stats) {
+  if (!stats.history || stats.history.length === 0) {
+    return `
+      <div class="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] text-center text-[11px] text-[var(--muted-foreground)]">
+        No hay registros aún de este ejercicio. Completa series en tu rutina para ver la evolución y RPE aquí.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="space-y-1.5">
+      <div class="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider px-1">
+        Historial de Sobrecarga Progresiva (Últimas sesiones)
+      </div>
+      ${stats.history.map(item => {
+        const dateFormatted = item.date ? new Date(item.date).toLocaleDateString('es-CL', {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short'
+        }) : 'Sesión';
+
+        const setsSummary = (item.sets || []).map(s => `${s.weight}kg × ${s.reps}`).join(' • ');
+
+        return `
+          <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px]">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-[var(--foreground)] capitalize">${dateFormatted}</span>
+              <span class="text-[var(--muted-foreground)]">• ${item.routineName}</span>
+            </div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="text-amber-500 font-mono font-medium">${setsSummary}</span>
+              <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 font-bold text-[10px] border border-amber-500/20">
+                Máx: ${item.bestWeight} kg
+              </span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
 }
 
 function attachSettingsEvents(container, settings) {
@@ -149,6 +347,108 @@ function attachSettingsEvents(container, settings) {
   const fileImport = container.querySelector('#fileImportJSON');
   const cloudStatusBadge = container.querySelector('#cloudStatusBadge');
   const textLastSync = container.querySelector('#textLastSync');
+
+  // --- FILTROS Y BÚSQUEDA DE EJERCICIOS ---
+  const filterTabs = container.querySelectorAll('.filter-tab-btn');
+  const searchInput = container.querySelector('#inputSearchExercise');
+  let currentFilter = 'all';
+  let currentSearch = '';
+
+  const filterCards = () => {
+    const cards = container.querySelectorAll('.exercise-card-item');
+    let visibleCount = 0;
+    cards.forEach(card => {
+      const routine = card.dataset.routine;
+      const keywords = card.dataset.keywords || '';
+      const matchFilter = currentFilter === 'all' || routine === currentFilter;
+      const matchSearch = !currentSearch || keywords.includes(currentSearch);
+      if (matchFilter && matchSearch) {
+        card.classList.remove('hidden');
+        visibleCount++;
+      } else {
+        card.classList.add('hidden');
+      }
+    });
+
+    const noResults = container.querySelector('#noExercisesFoundMsg');
+    if (noResults) {
+      noResults.classList.toggle('hidden', visibleCount > 0);
+    }
+  };
+
+  filterTabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterTabs.forEach(b => {
+        b.className = 'filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0';
+      });
+      btn.className = 'filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0';
+      currentFilter = btn.dataset.filter || 'all';
+      filterCards();
+    });
+  });
+
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      currentSearch = e.target.value.toLowerCase().trim();
+      filterCards();
+    });
+  }
+
+  // --- CONTROLES DE PESO OBJETIVO (+ / - / Input) ---
+  const adjustButtons = container.querySelectorAll('.btn-adjust-custom-weight');
+  adjustButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const delta = parseFloat(btn.dataset.delta) || 0;
+      const input = container.querySelector(`.input-custom-weight[data-id="${id}"]`);
+      if (input) {
+        const currentVal = parseFloat(input.value) || 0;
+        const newVal = Math.max(0, Math.round((currentVal + delta) * 10) / 10);
+        input.value = newVal;
+        db.setCustomWeight(id, newVal);
+
+        // Feedback visual
+        const ind = container.querySelector(`#savedIndicator_${id}`);
+        if (ind) {
+          ind.classList.remove('opacity-0');
+          setTimeout(() => ind.classList.add('opacity-0'), 1500);
+        }
+      }
+    });
+  });
+
+  const weightInputs = container.querySelectorAll('.input-custom-weight');
+  weightInputs.forEach(input => {
+    input.addEventListener('change', (e) => {
+      const id = e.target.dataset.id;
+      const newVal = Math.max(0, parseFloat(e.target.value) || 0);
+      e.target.value = newVal;
+      db.setCustomWeight(id, newVal);
+
+      const ind = container.querySelector(`#savedIndicator_${id}`);
+      if (ind) {
+        ind.classList.remove('opacity-0');
+        setTimeout(() => ind.classList.add('opacity-0'), 1500);
+      }
+    });
+  });
+
+  // --- BITÁCORA DESPLEGABLE (ACORDEÓN) ---
+  const historyButtons = container.querySelectorAll('.btn-toggle-history');
+  historyButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetId = btn.dataset.target;
+      const targetEl = container.querySelector(`#${targetId}`);
+      const chevron = btn.querySelector('span:last-child');
+      if (targetEl) {
+        const isHidden = targetEl.classList.contains('hidden');
+        targetEl.classList.toggle('hidden', !isHidden);
+        if (chevron) {
+          chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
+        }
+      }
+    });
+  });
 
   // Escuchar estado en vivo de Convex
   convex.onSyncStatus(({ status, isOnline, lastSync }) => {
