@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (Cache & Offline Support)
-const CACHE_NAME = 'kinetix-v1.7';
+const CACHE_NAME = 'kinetix-v1.8';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -9,6 +9,13 @@ const ASSETS_TO_CACHE = [
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
   './assets/images/rest_day_hero.jpg',
+  './assets/images/smartfit_ill_chest_press.jpg',
+  './assets/images/smartfit_ill_cable_row.jpg',
+  './assets/images/smartfit_ill_shoulder_press.jpg',
+  './assets/images/smartfit_ill_lat_pulldown.jpg',
+  './assets/images/smartfit_ill_triceps_pushdown.jpg',
+  './assets/images/smartfit_ill_biceps_curl.jpg',
+  './assets/images/smartfit_ill_leg_curl.jpg',
   './assets/images/smartfit_chest_press_1789138165787.jpg',
   './assets/images/smartfit_pec_deck_1789138210707.jpg',
   './assets/images/smartfit_back_machine_1789138318602.jpg',
