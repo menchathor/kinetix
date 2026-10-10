@@ -1,5 +1,5 @@
 // Módulo de Configuración, Sincronización Convex Cloud y Respaldo de Datos
-import { db } from '../services/db.js';
+import { db, formatDisplayDate } from '../services/db.js';
 import { INITIAL_DATA } from '../data/initialData.js';
 import { convex } from '../services/convex.js';
 import { CONFIG } from '../config.js';
@@ -313,7 +313,7 @@ function renderExerciseHistoryAccordion(stats) {
         Historial de Sobrecarga Progresiva (Últimas sesiones)
       </div>
       ${stats.history.map(item => {
-        const dateFormatted = item.date ? new Date(item.date).toLocaleDateString('es-CL', {
+        const dateFormatted = item.date ? formatDisplayDate(item.date, {
           weekday: 'short',
           day: 'numeric',
           month: 'short'

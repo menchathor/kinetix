@@ -62,10 +62,12 @@ class AppState {
     // Crear esqueleto de sesión
     this.activeWorkout = {
       id: 'session_' + Date.now(),
+      sessionId: 'session_' + Date.now(),
       routineId,
       routineName: routine.name,
       dayName: routine.dayName,
       startTime: new Date().toISOString(),
+      date: new Date().toLocaleDateString('en-CA'),
       cardioDone: false,
       cardioMinutes: 20,
       notes: '',

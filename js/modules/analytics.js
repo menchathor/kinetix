@@ -1,5 +1,5 @@
 // Módulo de Evolución, Gráficas de Sobrecarga Progresiva y Mediciones Corporales
-import { db } from '../services/db.js';
+import { db, formatDisplayDate } from '../services/db.js';
 import { INITIAL_DATA } from '../data/initialData.js';
 
 let weightChartInstance = null;
@@ -89,7 +89,7 @@ export function renderAnalyticsModule(container) {
               <div>
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-[var(--foreground)]">${log.routineName || 'Sesión'}</span>
-                  <span class="text-[10px] text-[var(--muted-foreground)]">${new Date(log.date || log.startTime).toLocaleDateString('es-CL')}</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">${formatDisplayDate(log)}</span>
                 </div>
                 <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
                   ${log.exercises?.length || 0} ejercicios completados ${log.durationMinutes ? `• ${log.durationMinutes} min` : ''}
@@ -178,7 +178,7 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
       }
 
       db.addMeasurement({
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toLocaleDateString('en-CA'),
         source: notes,
         weight,
         waistCm: waist,

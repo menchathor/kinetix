@@ -11,6 +11,27 @@ const KEYS = {
   CUSTOM_WEIGHTS: 'kinetix_custom_weights'
 };
 
+// Utilidad universal para formateo de fechas evitando desfases UTC/zona horaria
+export function formatDisplayDate(dateOrSession, options = {}) {
+  let val = dateOrSession;
+  if (dateOrSession && typeof dateOrSession === 'object') {
+    val = dateOrSession.startTime || dateOrSession.date;
+  }
+  if (!val) return '';
+
+  // Si es un string YYYY-MM-DD puro sin hora, new Date("YYYY-MM-DD") se parsea en UTC
+  // y en zonas horarias negativas (ej. Chile UTC-3) resta 1 día.
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    const [y, m, d] = val.split('-').map(Number);
+    const localNoon = new Date(y, m - 1, d, 12, 0, 0);
+    return localNoon.toLocaleDateString('es-CL', options);
+  }
+
+  const dateObj = new Date(val);
+  if (isNaN(dateObj.getTime())) return String(val);
+  return dateObj.toLocaleDateString('es-CL', options);
+}
+
 export class StorageService {
   constructor() {
     this.init();
@@ -121,13 +142,21 @@ export class StorageService {
   getWorkoutLogs() {
     try {
       const logs = JSON.parse(localStorage.getItem(KEYS.WORKOUT_LOGS)) || [];
-      return logs.map(l => ({
-        ...l,
-        id: l.id || l.sessionId,
-        sessionId: l.sessionId || l.id,
-        date: l.date || (l.startTime ? l.startTime.split('T')[0] : ''),
-        startTime: l.startTime || (l.date ? (l.date.includes('T') ? l.date : l.date + 'T18:00:00.000Z') : '')
-      }));
+      return logs.map(l => {
+        const startTime = l.startTime || (l.date ? (l.date.includes('T') ? l.date : l.date + 'T18:00:00.000Z') : '');
+        let date = l.date;
+        if (!date && startTime) {
+          const d = new Date(startTime);
+          date = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA') : startTime.split('T')[0];
+        }
+        return {
+          ...l,
+          id: l.id || l.sessionId,
+          sessionId: l.sessionId || l.id,
+          date: date || '',
+          startTime: startTime || ''
+        };
+      });
     } catch {
       return [];
     }
@@ -142,11 +171,12 @@ export class StorageService {
     if (!session.sessionId) {
       session.sessionId = session.id;
     }
-    if (!session.date) {
-      session.date = session.startTime ? session.startTime.split('T')[0] : new Date().toISOString().split('T')[0];
-    }
     if (!session.startTime) {
-      session.startTime = session.date.includes('T') ? session.date : session.date + 'T18:00:00.000Z';
+      session.startTime = session.date && session.date.includes('T') ? session.date : new Date().toISOString();
+    }
+    if (!session.date) {
+      const d = new Date(session.startTime);
+      session.date = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA') : new Date().toLocaleDateString('en-CA');
     }
     // Reemplazar si ya existía o agregar al inicio
     const index = logs.findIndex(l => (l.id === session.id || l.sessionId === session.id));
@@ -155,7 +185,7 @@ export class StorageService {
     } else {
       logs.unshift(session);
     }
-    logs.sort((a, b) => new Date(b.date || b.startTime || 0) - new Date(a.date || a.startTime || 0));
+    logs.sort((a, b) => new Date(b.startTime || b.date || 0) - new Date(a.startTime || a.date || 0));
     localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
     this.clearActiveSession();
 
@@ -220,15 +250,16 @@ export class StorageService {
 
   // --- NUTRICIÓN & HÁBITOS DIARIOS ---
   getTodayNutritionKey() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA');
     return `${KEYS.DAILY_NUTRITION}_${today}`;
   }
 
   getTodayNutrition() {
     const key = this.getTodayNutritionKey();
+    const today = new Date().toLocaleDateString('en-CA');
     try {
       return JSON.parse(localStorage.getItem(key)) || {
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         medicationTaken: false,
         waterMl: 0,
         completedMeals: {},
@@ -236,7 +267,7 @@ export class StorageService {
       };
     } catch {
       return {
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         medicationTaken: false,
         waterMl: 0,
         completedMeals: {},
@@ -248,7 +279,7 @@ export class StorageService {
   saveTodayNutrition(data) {
     const key = this.getTodayNutritionKey();
     localStorage.setItem(key, JSON.stringify(data));
-    const today = data.date || new Date().toISOString().split('T')[0];
+    const today = data.date || new Date().toLocaleDateString('en-CA');
     convex.syncNutrition(today, data).catch(err => {
       console.warn('[Convex] Error sincronizando nutrición:', err);
     });
@@ -323,12 +354,18 @@ export class StorageService {
         for (const lw of localWorkouts) {
           const key = lw.id || lw.sessionId;
           if (key) {
+            const startTime = lw.startTime || (lw.date ? (lw.date.includes('T') ? lw.date : lw.date + 'T18:00:00.000Z') : '');
+            let date = lw.date;
+            if ((!date || /^\d{4}-\d{2}-\d{2}$/.test(date)) && startTime) {
+              const d = new Date(startTime);
+              if (!isNaN(d.getTime())) date = d.toLocaleDateString('en-CA');
+            }
             workoutMap.set(key, {
               ...lw,
               id: key,
               sessionId: key,
-              date: lw.date || (lw.startTime ? lw.startTime.split('T')[0] : ''),
-              startTime: lw.startTime || (lw.date ? (lw.date.includes('T') ? lw.date : lw.date + 'T18:00:00.000Z') : '')
+              date: date || '',
+              startTime: startTime || ''
             });
           }
         }
@@ -342,8 +379,10 @@ export class StorageService {
           if (isNew) importedWorkouts++;
 
           const existing = workoutMap.get(key) || {};
-          const date = cw.date || existing.date || (cw.startTime ? cw.startTime.split('T')[0] : new Date().toISOString().split('T')[0]);
-          const startTime = cw.startTime || existing.startTime || (date ? (date.includes('T') ? date : date + 'T18:00:00.000Z') : new Date().toISOString());
+          const startTime = cw.startTime || existing.startTime || (cw.date ? (cw.date.includes('T') ? cw.date : cw.date + 'T18:00:00.000Z') : new Date().toISOString());
+          const d = new Date(startTime);
+          const localDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-CA') : '';
+          const date = localDateStr || cw.date || existing.date || new Date().toLocaleDateString('en-CA');
 
           const normalized = {
             ...existing,
@@ -357,9 +396,9 @@ export class StorageService {
           workoutMap.set(key, normalized);
         }
 
-        // Ordenar cronológicamente descendente (más reciente primero)
+        // Ordenar cronológicamente descendente (más reciente primero por timestamp exacto)
         const mergedWorkouts = Array.from(workoutMap.values());
-        mergedWorkouts.sort((a, b) => new Date(b.date || b.startTime || 0) - new Date(a.date || a.startTime || 0));
+        mergedWorkouts.sort((a, b) => new Date(b.startTime || b.date || 0) - new Date(a.startTime || a.date || 0));
         localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(mergedWorkouts));
       }
 
@@ -477,14 +516,14 @@ export class StorageService {
 
         if (maxSetWeight > prWeight) {
           prWeight = maxSetWeight;
-          prDate = session.date || session.startTime;
+          prDate = session.startTime || session.date;
         }
 
         latestWeight = maxSetWeight;
-        latestDate = session.date || session.startTime;
+        latestDate = session.startTime || session.date;
 
         history.push({
-          date: session.date || session.startTime,
+          date: session.startTime || session.date,
           routineName: session.routineName || 'Sesión',
           sets: validSets.map(s => ({
             setNumber: s.setNumber,
@@ -567,7 +606,7 @@ export class StorageService {
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.10',
+      version: '1.11',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),
