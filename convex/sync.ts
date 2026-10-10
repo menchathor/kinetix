@@ -25,7 +25,7 @@ export const bulkSync = mutation({
           routineId: w.routineId || "general",
           routineName: w.routineName || "Sesión",
           dayName: w.dayName || "",
-          startTime: w.startTime || new Date().toISOString(),
+          startTime: w.startTime || (w.date ? (w.date.includes("T") ? w.date : w.date + "T18:00:00.000Z") : new Date().toISOString()),
           endTime: w.endTime,
           durationMinutes: w.durationMinutes || 0,
           cardioDone: !!w.cardioDone,
@@ -66,10 +66,10 @@ export const bulkSync = mutation({
 
         const doc = {
           date: m.date,
-          weightKg: Number(m.weightKg) || 0,
-          bodyFatPercent: m.bodyFatPercent ? Number(m.bodyFatPercent) : undefined,
-          muscleMassKg: m.muscleMassKg ? Number(m.muscleMassKg) : undefined,
-          visceralFat: m.visceralFat ? Number(m.visceralFat) : undefined,
+          weightKg: Number(m.weightKg || m.weight) || 0,
+          bodyFatPercent: m.bodyFatPercent ? Number(m.bodyFatPercent) : (m.fatPercent ? Number(m.fatPercent) : undefined),
+          muscleMassKg: m.muscleMassKg ? Number(m.muscleMassKg) : (m.muscleMass ? Number(m.muscleMass) : undefined),
+          visceralFat: m.visceralFat !== undefined ? Number(m.visceralFat) : undefined,
           waistCircumferenceCm: m.waistCircumferenceCm ? Number(m.waistCircumferenceCm) : undefined,
           notes: m.notes || "",
           source: m.source || "Manual",

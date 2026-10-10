@@ -3,6 +3,7 @@ import { db } from '../services/db.js';
 import { INITIAL_DATA } from '../data/initialData.js';
 import { convex } from '../services/convex.js';
 import { CONFIG } from '../config.js';
+import { state } from '../state.js';
 
 export function renderSettingsModule(container) {
   const settings = db.getSettings();
@@ -473,14 +474,14 @@ function attachSettingsEvents(container, settings) {
     });
   }
 
-  // Sincronización Manual Inmediata a Convex
+  // Sincronización Manual Bidireccional Inmediata con Convex
   if (btnSyncNow) {
     btnSyncNow.addEventListener('click', async () => {
       const iconSync = container.querySelector('#iconSync');
       const textSync = container.querySelector('#textSyncBtn');
       
       if (!navigator.onLine) {
-        alert('Actualmente no tienes conexión a internet. Los datos están seguros en tu teléfono y se sincronizarán al reconectar.');
+        alert('Actualmente no tienes conexión a internet. Los datos están seguros en tu equipo y se sincronizarán al reconectar.');
         return;
       }
 
@@ -489,12 +490,23 @@ function attachSettingsEvents(container, settings) {
       if (textSync) textSync.textContent = 'Sincronizando...';
 
       try {
-        const res = await db.syncAllToConvex();
+        const res = await db.syncTwoWay();
         if (res && res.success) {
           if (iconSync) iconSync.textContent = '✅';
           if (textSync) textSync.textContent = '¡Sincronizado!';
           if (textLastSync) textLastSync.textContent = new Date().toLocaleTimeString();
-          alert(`¡Sincronización con Convex exitosa!\n• Entrenamientos: ${res.data?.workoutsSynced ?? 0}\n• Mediciones: ${res.data?.measurementsSynced ?? 0}`);
+
+          const infoMsg = `¡Sincronización Bidireccional Exitosa!\n\n` +
+            `• Nube ➔ Este dispositivo: ${res.importedWorkouts} nuevos entrenamientos descargados\n` +
+            `• Este dispositivo ➔ Nube: ${res.uploadedWorkouts} entrenamientos respaldados\n` +
+            `• Total en tu historial: ${res.totalWorkouts} sesiones disponibles\n` +
+            `• Mediciones corporales: ${res.totalMeas} registradas`;
+
+          alert(infoMsg);
+
+          // Actualizar reactividad global y re-renderizar módulo para reflejar tarjetas/bitácoras al instante
+          state.notify();
+          renderSettingsModule(container);
         } else {
           alert('No se pudo completar la sincronización con Convex: ' + (res?.error || 'Revisa tu conexión'));
         }
@@ -518,17 +530,18 @@ function attachSettingsEvents(container, settings) {
         return;
       }
 
-      const confirmRestore = confirm('¿Deseas descargar y fusionar tu historial guardado en Convex Cloud con los datos de este dispositivo?');
+      const confirmRestore = confirm('¿Deseas sincronizar y descargar todo el historial guardado en Convex Cloud hacia este dispositivo?');
       if (!confirmRestore) return;
 
       btnPullFromCloud.disabled = true;
-      btnPullFromCloud.textContent = '⏳ Descargando...';
+      btnPullFromCloud.textContent = '⏳ Sincronizando...';
 
       try {
-        const res = await db.pullFromConvex();
+        const res = await db.syncTwoWay();
         if (res.success) {
-          alert(`¡Descarga completada!\n• Nuevos entrenamientos: ${res.importedWorkouts}\n• Nuevas mediciones: ${res.importedMeas}`);
-          location.reload();
+          alert(`¡Historial sincronizado desde la nube!\n• Nuevos entrenamientos descargados: ${res.importedWorkouts}\n• Total entrenamientos: ${res.totalWorkouts}`);
+          state.notify();
+          renderSettingsModule(container);
         } else {
           alert('Error al descargar datos de la nube: ' + (res.error || 'Desconocido'));
         }

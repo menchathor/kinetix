@@ -34,7 +34,9 @@ export class StorageService {
     // Registro inicial de calibración con las marcas que Michael ya tomó
     const baselineSession = {
       id: 'session_baseline_20260910',
+      sessionId: 'session_baseline_20260910',
       date: '2026-09-10T18:30:00',
+      startTime: '2026-09-10T18:30:00.000Z',
       routineId: 'calibracion_inicial',
       routineName: 'Calibración de Pesos Base',
       notes: 'Sesión de calibración de máquinas en Smart Fit (8-10 reps)',
@@ -118,7 +120,14 @@ export class StorageService {
   // --- ENTRENAMIENTOS ---
   getWorkoutLogs() {
     try {
-      return JSON.parse(localStorage.getItem(KEYS.WORKOUT_LOGS)) || [];
+      const logs = JSON.parse(localStorage.getItem(KEYS.WORKOUT_LOGS)) || [];
+      return logs.map(l => ({
+        ...l,
+        id: l.id || l.sessionId,
+        sessionId: l.sessionId || l.id,
+        date: l.date || (l.startTime ? l.startTime.split('T')[0] : ''),
+        startTime: l.startTime || (l.date ? (l.date.includes('T') ? l.date : l.date + 'T18:00:00.000Z') : '')
+      }));
     } catch {
       return [];
     }
@@ -130,13 +139,23 @@ export class StorageService {
     if (!session.id) {
       session.id = 'session_' + Date.now();
     }
+    if (!session.sessionId) {
+      session.sessionId = session.id;
+    }
+    if (!session.date) {
+      session.date = session.startTime ? session.startTime.split('T')[0] : new Date().toISOString().split('T')[0];
+    }
+    if (!session.startTime) {
+      session.startTime = session.date.includes('T') ? session.date : session.date + 'T18:00:00.000Z';
+    }
     // Reemplazar si ya existía o agregar al inicio
-    const index = logs.findIndex(l => l.id === session.id);
+    const index = logs.findIndex(l => (l.id === session.id || l.sessionId === session.id));
     if (index >= 0) {
       logs[index] = session;
     } else {
       logs.unshift(session);
     }
+    logs.sort((a, b) => new Date(b.date || b.startTime || 0) - new Date(a.date || a.startTime || 0));
     localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(logs));
     this.clearActiveSession();
 
@@ -268,16 +287,26 @@ export class StorageService {
     localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
   }
 
-  // Sincronizar todo el historial local a Convex Cloud
-  async syncAllToConvex() {
-    const workouts = this.getWorkoutLogs();
-    const measurements = this.getMeasurements();
-    return await convex.syncAllLocalData(workouts, measurements);
-  }
+  // Sincronización bidireccional completa (Local-First: Push + Pull + Normalización)
+  async syncTwoWay(options = {}) {
+    if (!navigator.onLine) {
+      return { success: false, offline: true, error: 'Sin conexión a internet' };
+    }
 
-  // Descargar y fusionar datos desde Convex Cloud hacia localStorage
-  async pullFromConvex() {
     try {
+      // 1. Obtener datos locales actuales
+      const localWorkouts = this.getWorkoutLogs();
+      const localMeas = this.getMeasurements();
+
+      // 2. Subir datos locales a Convex Cloud (Push preventivo)
+      let pushRes = null;
+      try {
+        pushRes = await convex.syncAllLocalData(localWorkouts, localMeas);
+      } catch (pushErr) {
+        console.warn('[DB] Advertencia al subir datos locales a Convex:', pushErr);
+      }
+
+      // 3. Descargar todo el historial desde Convex Cloud (Pull)
       const [cloudWorkoutsRes, cloudMeasRes] = await Promise.all([
         convex.fetchCloudWorkouts(),
         convex.fetchCloudMeasurements()
@@ -286,39 +315,112 @@ export class StorageService {
       let importedWorkouts = 0;
       let importedMeas = 0;
 
+      // 4. Fusionar y normalizar entrenamientos
       if (cloudWorkoutsRes.success && Array.isArray(cloudWorkoutsRes.data)) {
-        const localLogs = this.getWorkoutLogs();
-        const localIds = new Set(localLogs.map(l => l.id || l.sessionId));
-        
-        for (const cw of cloudWorkoutsRes.data) {
-          const id = cw.sessionId || cw.id;
-          if (!localIds.has(id)) {
-            localLogs.push(cw);
-            importedWorkouts++;
+        const workoutMap = new Map();
+
+        // Registrar existentes locales
+        for (const lw of localWorkouts) {
+          const key = lw.id || lw.sessionId;
+          if (key) {
+            workoutMap.set(key, {
+              ...lw,
+              id: key,
+              sessionId: key,
+              date: lw.date || (lw.startTime ? lw.startTime.split('T')[0] : ''),
+              startTime: lw.startTime || (lw.date ? (lw.date.includes('T') ? lw.date : lw.date + 'T18:00:00.000Z') : '')
+            });
           }
         }
-        localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(localLogs));
+
+        // Fusionar con los de Convex Cloud
+        for (const cw of cloudWorkoutsRes.data) {
+          const key = cw.sessionId || cw.id;
+          if (!key) continue;
+
+          const isNew = !workoutMap.has(key);
+          if (isNew) importedWorkouts++;
+
+          const existing = workoutMap.get(key) || {};
+          const date = cw.date || existing.date || (cw.startTime ? cw.startTime.split('T')[0] : new Date().toISOString().split('T')[0]);
+          const startTime = cw.startTime || existing.startTime || (date ? (date.includes('T') ? date : date + 'T18:00:00.000Z') : new Date().toISOString());
+
+          const normalized = {
+            ...existing,
+            ...cw,
+            id: key,
+            sessionId: key,
+            date,
+            startTime
+          };
+
+          workoutMap.set(key, normalized);
+        }
+
+        // Ordenar cronológicamente descendente (más reciente primero)
+        const mergedWorkouts = Array.from(workoutMap.values());
+        mergedWorkouts.sort((a, b) => new Date(b.date || b.startTime || 0) - new Date(a.date || a.startTime || 0));
+        localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(mergedWorkouts));
       }
 
+      // 5. Fusionar y normalizar mediciones
       if (cloudMeasRes.success && Array.isArray(cloudMeasRes.data)) {
-        const localMeas = this.getMeasurements();
-        const localDates = new Set(localMeas.map(m => m.date));
+        const measMap = new Map();
+
+        for (const lm of localMeas) {
+          if (lm.date) measMap.set(lm.date, lm);
+        }
 
         for (const cm of cloudMeasRes.data) {
-          if (!localDates.has(cm.date)) {
-            localMeas.push(cm);
-            importedMeas++;
-          }
+          if (!cm.date) continue;
+          const isNew = !measMap.has(cm.date);
+          if (isNew) importedMeas++;
+
+          const existing = measMap.get(cm.date) || {};
+          const normalized = {
+            ...existing,
+            ...cm,
+            weight: cm.weight !== undefined && cm.weight > 0 ? cm.weight : (cm.weightKg || existing.weight || 0),
+            weightKg: cm.weightKg !== undefined && cm.weightKg > 0 ? cm.weightKg : (cm.weight || existing.weightKg || 0),
+            muscleMass: cm.muscleMass !== undefined ? cm.muscleMass : (cm.muscleMassKg || existing.muscleMass),
+            muscleMassKg: cm.muscleMassKg !== undefined ? cm.muscleMassKg : (cm.muscleMass || existing.muscleMassKg),
+            visceralFat: cm.visceralFat !== undefined ? cm.visceralFat : (existing.visceralFat || 0),
+            source: cm.source || existing.source || 'Manual'
+          };
+
+          measMap.set(cm.date, normalized);
         }
-        localMeas.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(localMeas));
+
+        const mergedMeas = Array.from(measMap.values());
+        mergedMeas.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(mergedMeas));
       }
 
-      return { success: true, importedWorkouts, importedMeas };
+      const totalWorkouts = this.getWorkoutLogs().length;
+      const totalMeas = this.getMeasurements().length;
+
+      return {
+        success: true,
+        uploadedWorkouts: pushRes?.data?.workoutsSynced ?? 0,
+        uploadedMeas: pushRes?.data?.measurementsSynced ?? 0,
+        importedWorkouts,
+        importedMeas,
+        totalWorkouts,
+        totalMeas
+      };
     } catch (err) {
-      console.warn('[Convex] Error al restaurar desde la nube:', err);
+      console.warn('[DB] Error en sincronización bidireccional:', err);
       return { success: false, error: err.message };
     }
+  }
+
+  // Compatibilidad con llamadas previas
+  async syncAllToConvex() {
+    return await this.syncTwoWay();
+  }
+
+  async pullFromConvex() {
+    return await this.syncTwoWay();
   }
 
   // --- GESTIÓN DE PESOS BASE PERSONALIZADOS & BITÁCORA ---
@@ -465,7 +567,7 @@ export class StorageService {
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.7',
+      version: '1.10',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),

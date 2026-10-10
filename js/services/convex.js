@@ -119,7 +119,7 @@ class ConvexService {
       routineId: session.routineId || 'general',
       routineName: session.routineName || 'Sesión',
       dayName: session.dayName || '',
-      startTime: session.startTime || new Date().toISOString(),
+      startTime: session.startTime || (session.date ? (session.date.includes('T') ? session.date : session.date + 'T18:00:00.000Z') : new Date().toISOString()),
       endTime: session.endTime || undefined,
       durationMinutes: session.durationMinutes ? Number(session.durationMinutes) : undefined,
       cardioDone: !!session.cardioDone,
@@ -164,10 +164,10 @@ class ConvexService {
     if (!measurement || !measurement.date) return;
     const formatted = {
       date: measurement.date,
-      weightKg: Number(measurement.weightKg) || 0,
-      bodyFatPercent: measurement.bodyFatPercent ? Number(measurement.bodyFatPercent) : undefined,
-      muscleMassKg: measurement.muscleMassKg ? Number(measurement.muscleMassKg) : undefined,
-      visceralFat: measurement.visceralFat ? Number(measurement.visceralFat) : undefined,
+      weightKg: Number(measurement.weightKg || measurement.weight) || 0,
+      bodyFatPercent: measurement.bodyFatPercent ? Number(measurement.bodyFatPercent) : (measurement.fatPercent ? Number(measurement.fatPercent) : undefined),
+      muscleMassKg: measurement.muscleMassKg ? Number(measurement.muscleMassKg) : (measurement.muscleMass ? Number(measurement.muscleMass) : undefined),
+      visceralFat: measurement.visceralFat !== undefined ? Number(measurement.visceralFat) : undefined,
       waistCircumferenceCm: measurement.waistCircumferenceCm ? Number(measurement.waistCircumferenceCm) : undefined,
       notes: measurement.notes || undefined,
       source: measurement.source || 'Manual',

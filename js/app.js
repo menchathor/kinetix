@@ -5,6 +5,7 @@ import { renderWorkoutModule } from './modules/workout.js';
 import { renderNutritionModule } from './modules/nutrition.js';
 import { renderAnalyticsModule } from './modules/analytics.js';
 import { renderSettingsModule } from './modules/settings.js';
+import { db } from './services/db.js';
 
 class App {
   constructor() {
@@ -40,6 +41,9 @@ class App {
     // Render inicial
     this.renderCurrentView(false);
     this.updateNavigationUI();
+
+    // Sincronización automática bidireccional en segundo plano (Local-First)
+    this.initAutoSync();
 
     // Registrar Service Worker para soporte offline PWA
     this.registerServiceWorker();
@@ -168,6 +172,34 @@ class App {
         timer.stop();
       } else {
         timer.start();
+      }
+    });
+  }
+
+  async initAutoSync() {
+    // Sincronización transparente en segundo plano al iniciar
+    if (navigator.onLine) {
+      try {
+        const res = await db.syncTwoWay({ silent: true });
+        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0)) {
+          console.log(`[AutoSync] Datos sincronizados desde la nube (+${res.importedWorkouts} entrenamientos).`);
+          state.notify();
+        }
+      } catch (err) {
+        console.log('[AutoSync] Segundo plano diferido:', err);
+      }
+    }
+
+    // Al reconectar a internet, sincronizar automáticamente
+    window.addEventListener('online', async () => {
+      try {
+        const res = await db.syncTwoWay({ silent: true });
+        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0)) {
+          console.log(`[AutoSync-Online] Sincronizados tras reconexión (+${res.importedWorkouts} entrenamientos).`);
+          state.notify();
+        }
+      } catch (err) {
+        console.warn('[AutoSync-Online] Error en reconexión:', err);
       }
     });
   }

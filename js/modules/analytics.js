@@ -89,7 +89,7 @@ export function renderAnalyticsModule(container) {
               <div>
                 <div class="flex items-center gap-2">
                   <span class="font-bold text-[var(--foreground)]">${log.routineName || 'Sesión'}</span>
-                  <span class="text-[10px] text-[var(--muted-foreground)]">${new Date(log.date).toLocaleDateString('es-CL')}</span>
+                  <span class="text-[10px] text-[var(--muted-foreground)]">${new Date(log.date || log.startTime).toLocaleDateString('es-CL')}</span>
                 </div>
                 <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
                   ${log.exercises?.length || 0} ejercicios completados ${log.durationMinutes ? `• ${log.durationMinutes} min` : ''}
@@ -206,8 +206,8 @@ function initWeightChart(measurements) {
   const textColor = isDark ? '#94a3b8' : '#64748b';
 
   const reversed = [...measurements].reverse();
-  const labels = reversed.map(m => m.date.slice(5)); // MM-DD
-  const dataWeights = reversed.map(m => m.weight);
+  const labels = reversed.map(m => (m.date ? m.date.slice(5) : '')); // MM-DD
+  const dataWeights = reversed.map(m => Number(m.weight !== undefined ? m.weight : m.weightKg) || 0);
 
   if (weightChartInstance) {
     weightChartInstance.destroy();
@@ -279,9 +279,12 @@ function initExerciseChart(workoutLogs, exerciseId) {
       if (ex && ex.sets) {
         const bestSet = ex.sets.find(s => s.completed) || ex.sets[0];
         if (bestSet && bestSet.weight) {
-          labels.push(session.date.slice(5, 10));
-          weights.push(parseFloat(bestSet.weight) || 0);
-          reps.push(parseInt(bestSet.reps) || 0);
+          const dateStr = session.date || (session.startTime ? session.startTime.split('T')[0] : '');
+          if (dateStr) {
+            labels.push(dateStr.slice(5, 10));
+            weights.push(parseFloat(bestSet.weight) || 0);
+            reps.push(parseInt(bestSet.reps) || 0);
+          }
         }
       }
     }
