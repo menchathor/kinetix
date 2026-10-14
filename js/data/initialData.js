@@ -4,12 +4,18 @@ export const INITIAL_DATA = {
     name: "Michael Meneses Mora",
     age: 36,
     height: 173,
-    startWeight: 85.0,
+    startWeight: 85.3,
+    currentWeight: 82.2,
     targetWeightMin: 72.0,
     targetWeightMax: 74.0,
-    skeletalMuscleMass: 37.0,
+    skeletalMuscleMass: 36.0,
     fatFreeMass: 58.3,
-    trunkFat: 16.45,
+    trunkFat: 13.97,
+    bodyFatPercent: 23.2,
+    fatMassKg: 19.1,
+    visceralFat: 8,
+    basalMetabolicRate: 1817,
+    appendicularLeanIndex: 9.57,
     waterTargetLitres: 3.0,
     gymSchedule: "18:00 - 19:15",
     condition: "Hipotiroidismo medicado (Levotiroxina 06:30 - 07:00 en ayunas)"
@@ -587,16 +593,33 @@ export const INITIAL_DATA = {
 
   measurementsHistory: [
     {
-      date: "2026-09-07",
+      date: "2026-10-13",
+      source: "Eufy Life (Báscula hogar)",
+      weight: 84.1,
+      muscleMass: 36.0,
+      fatMass: 23.8,
+      fatPercent: 28.3,
+      visceralFat: 12,
+      waterPercent: 49.2,
+      boneMass: 3.1,
+      bmr: 1683,
+      notes: "Control matutino hogar en ayunas 07:16 hrs (-0.7 kg vs sept)"
+    },
+    {
+      date: "2026-10-12",
       source: "Smart Fit (InBody multicanal)",
-      weight: 85.3,
-      muscleMass: 37.0,
-      fatMass: 22.0,
-      fatPercent: 25.8,
-      visceralFat: 9,
+      weight: 82.2,
+      muscleMass: 36.0,
+      fatFreeMass: 58.3,
+      fatMass: 19.1,
+      fatPercent: 23.2,
+      visceralFat: 8,
       waterLitres: 42.7,
-      waterPercent: 50.0,
-      trunkFat: 16.45
+      waterPercent: 51.9,
+      trunkFat: 13.97,
+      bmr: 1817.17,
+      appendicularLeanIndex: 9.57,
+      notes: "Control InBody Smart Fit mes 1: -3.1 kg peso, -2.9 kg grasa pura, masa libre de grasa intacta (58.3 kg)"
     },
     {
       date: "2026-09-08",
@@ -609,6 +632,19 @@ export const INITIAL_DATA = {
       waterLitres: 41.5,
       waterPercent: 49.0,
       trunkFat: 16.0
+    },
+    {
+      date: "2026-09-07",
+      source: "Smart Fit (InBody multicanal)",
+      weight: 85.3,
+      muscleMass: 37.0,
+      fatMass: 22.0,
+      fatPercent: 25.8,
+      visceralFat: 9,
+      waterLitres: 42.7,
+      waterPercent: 50.0,
+      trunkFat: 16.45,
+      fatFreeMass: 58.3
     }
   ]
 };

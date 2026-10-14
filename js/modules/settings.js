@@ -15,8 +15,13 @@ export function renderSettingsModule(container) {
       
       <!-- PERFIL DEL USUARIO -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <h2 class="text-base font-bold text-[var(--foreground)] mb-1">Perfil Clínico & Deportivo</h2>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">Parámetros fisiológicos base para recomposición</p>
+        <div class="flex items-center justify-between mb-1">
+          <h2 class="text-base font-bold text-[var(--foreground)]">Perfil Clínico & Deportivo</h2>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
+            Control InBody Oct 2026
+          </span>
+        </div>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">Parámetros fisiológicos activos para recomposición corporal</p>
 
         <div class="space-y-2 text-xs">
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
@@ -28,8 +33,28 @@ export function renderSettingsModule(container) {
             <span class="font-bold text-[var(--foreground)]">${profile.height} cm • ${profile.age} años</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Peso Actual (InBody):</span>
+            <span class="font-bold text-[var(--foreground)]">${profile.currentWeight} kg <span class="text-emerald-400 font-extrabold text-[11px]">(-3.1 kg)</span></span>
+          </div>
+          <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Masa Libre de Grasa (Magra):</span>
+            <span class="font-bold text-blue-400">${profile.fatFreeMass} kg <span class="text-[10px] text-blue-300 font-normal">(100% blindada)</span></span>
+          </div>
+          <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Masa Muscular Esquelética:</span>
             <span class="font-bold text-blue-400">${profile.skeletalMuscleMass} kg (Activo metabólico)</span>
+          </div>
+          <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Grasa Corporal / Troncal:</span>
+            <span class="font-bold text-emerald-400">${profile.bodyFatPercent}% (${profile.fatMassKg} kg) • Tronco: ${profile.trunkFat} kg</span>
+          </div>
+          <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Grasa Visceral:</span>
+            <span class="font-bold text-emerald-400">Nivel ${profile.visceralFat} (Rango saludable 0-10)</span>
+          </div>
+          <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
+            <span class="text-[var(--muted-foreground)]">Tasa Metabólica Basal (TMB):</span>
+            <span class="font-mono font-bold text-[var(--foreground)]">${profile.basalMetabolicRate} kcal / día</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Peso Diana Sostenible:</span>

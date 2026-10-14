@@ -38,9 +38,24 @@ export class StorageService {
   }
 
   init() {
-    // Inicializar mediciones si no existen
-    if (!localStorage.getItem(KEYS.MEASUREMENTS)) {
-      localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(INITIAL_DATA.measurementsHistory));
+    // Inicializar o actualizar mediciones en localStorage
+    let measurements = [];
+    try {
+      measurements = JSON.parse(localStorage.getItem(KEYS.MEASUREMENTS)) || [];
+    } catch {
+      measurements = [];
+    }
+    const existingDates = new Set(measurements.map(m => m.date));
+    let measUpdated = false;
+    for (const initM of INITIAL_DATA.measurementsHistory) {
+      if (!existingDates.has(initM.date)) {
+        measurements.push(initM);
+        measUpdated = true;
+      }
+    }
+    if (measUpdated || !localStorage.getItem(KEYS.MEASUREMENTS)) {
+      measurements.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(measurements));
     }
     // Inicializar settings
     if (!localStorage.getItem(KEYS.SETTINGS)) {
@@ -606,7 +621,7 @@ export class StorageService {
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.11',
+      version: '1.12',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),
