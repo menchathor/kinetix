@@ -1,11 +1,8 @@
-// Módulo de Nutrición, Hidratación y Hábitos Clínicos (Plan v1)
+// Módulo de Nutrición, Hidratación y Pauta Clínica (Guía de Referencia)
 import { INITIAL_DATA } from '../data/initialData.js';
-import { db } from '../services/db.js';
 
 export function renderNutritionModule(container) {
   const nutritionData = INITIAL_DATA.nutrition;
-  const todayLog = db.getTodayNutrition();
-  const waterProgress = Math.min(100, Math.round((todayLog.waterMl / nutritionData.targetWaterMl) * 100));
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -14,10 +11,15 @@ export function renderNutritionModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between pb-3 border-b border-[var(--border)]">
           <div>
-            <h2 class="text-base font-bold text-[var(--foreground)]">Plan Nutricional & Hábitos</h2>
-            <p class="text-xs text-[var(--muted-foreground)]">Objetivo: Recomposición & Protección Tiroidea</p>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-[var(--foreground)]">Guía Nutricional & Pauta Clínica</h2>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                Pauta de Referencia
+              </span>
+            </div>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">Recomposición Corporal • Protección Muscular (58.3 kg magros) & Tiroidea</p>
           </div>
-          <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+          <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
             ~${nutritionData.targetCalories} kcal
           </span>
         </div>
@@ -27,208 +29,171 @@ export function renderNutritionModule(container) {
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Proteína</span>
             <span class="text-base font-extrabold text-blue-400 block">${nutritionData.targetProtein}g</span>
-            <span class="text-[10px] text-[var(--muted-foreground)]">31% (1.7 g/kg)</span>
+            <span class="text-[10px] text-[var(--muted-foreground)]">31% (~1.8 g/kg)</span>
           </div>
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Carbohidratos</span>
             <span class="text-base font-extrabold text-amber-400 block">${nutritionData.targetCarbs}g</span>
-            <span class="text-[10px] text-[var(--muted-foreground)]">40% (T4 a T3)</span>
+            <span class="text-[10px] text-[var(--muted-foreground)]">40% (Conversión T4➔T3)</span>
           </div>
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Grasas Buenas</span>
             <span class="text-base font-extrabold text-emerald-400 block">${nutritionData.targetFats}g</span>
-            <span class="text-[10px] text-[var(--muted-foreground)]">29% (Hormonal)</span>
+            <span class="text-[10px] text-[var(--muted-foreground)]">29% (Soporte Hormonal)</span>
           </div>
         </div>
       </div>
 
-      <!-- CONTROL CLÍNICO: LEVOTIROXINA -->
-      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <div class="flex items-start justify-between gap-3">
-          <div class="flex items-start gap-3">
-            <div class="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center shrink-0 text-lg">
-              💊
-            </div>
-            <div>
+      <!-- PILARES CLÍNICOS DIARIOS (SOLO CONSULTA) -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <!-- Pilar 1: Protocolo Levotiroxina -->
+        <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
               <div class="flex items-center gap-2">
-                <h3 class="font-bold text-sm text-[var(--foreground)]">Levotiroxina (06:30 – 07:00)</h3>
-                <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-bold">Crítico</span>
-              </div>
-              <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
-                Tomar con vaso grande de agua pura. Mantener ayuno estricto de 1 a 2 horas (sin café ni comida).
-              </p>
-            </div>
-          </div>
-
-          <button 
-            id="btnToggleMed" 
-            class="shrink-0 w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all ${todayLog.medicationTaken 
-              ? 'bg-purple-500 text-slate-950 shadow-sm' 
-              : 'bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--border)]'}">
-            ${todayLog.medicationTaken ? '✓' : '○'}
-          </button>
-        </div>
-      </div>
-
-      <!-- TRACKER DE HIDRATACIÓN DIARIA (TARGET: 3.0 LITROS) -->
-      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="text-xl">💧</span>
-            <div>
-              <h3 class="font-bold text-sm text-[var(--foreground)]">Hidratación Diaria</h3>
-              <p class="text-xs text-[var(--muted-foreground)]">Meta: ${nutritionData.targetWaterMl / 1000} Litros diarios</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <span class="font-mono text-base font-extrabold text-blue-400" id="waterCounterText">
-              ${(todayLog.waterMl / 1000).toFixed(2)} L
-            </span>
-            <span class="text-[10px] text-[var(--muted-foreground)] block">(${waterProgress}%)</span>
-          </div>
-        </div>
-
-        <!-- Barra de progreso -->
-        <div class="w-full h-3 bg-[var(--accent)] rounded-full overflow-hidden mt-3 border border-[var(--border)]">
-          <div 
-            id="waterProgressBar" 
-            class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300 rounded-full" 
-            style="width: ${waterProgress}%"></div>
-        </div>
-
-        <!-- Botones de incremento -->
-        <div class="flex items-center justify-between gap-2 mt-3">
-          <button id="btnAddWater250" class="flex-1 py-1.5 px-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs font-semibold text-[var(--foreground)] transition-all flex items-center justify-center gap-1">
-            <span>+250 ml (Vaso)</span>
-          </button>
-          <button id="btnAddWater500" class="flex-1 py-1.5 px-2 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 text-xs font-bold transition-all flex items-center justify-center gap-1">
-            <span>+500 ml (Botella)</span>
-          </button>
-          <button id="btnSubWater250" class="py-1.5 px-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] text-xs text-[var(--muted-foreground)] transition-all" title="Restar 250ml">
-            -250 ml
-          </button>
-        </div>
-      </div>
-
-      <!-- DESGLOSE DE COMIDAS DEL PLAN V1 -->
-      <div class="space-y-3">
-        <h3 class="text-xs uppercase font-bold tracking-wider text-[var(--muted-foreground)] px-1">
-          Estructura de Comidas (Alineada al Entrenamiento 18:00 hrs)
-        </h3>
-
-        ${nutritionData.meals.map(meal => {
-          const isDone = todayLog.completedMeals && todayLog.completedMeals[meal.id];
-
-          return `
-            <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs transition-all ${isDone ? 'opacity-70 bg-[var(--accent)]/30' : ''}">
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[var(--accent)] text-amber-500">
-                      ${meal.time}
-                    </span>
-                    <h4 class="font-bold text-sm text-[var(--foreground)]">${meal.name}</h4>
-                  </div>
-                  <span class="inline-block text-[10px] text-emerald-400 font-semibold mt-1">
-                    🎯 ${meal.badge}
-                  </span>
-
-                  <!-- Lista de Alimentos -->
-                  <ul class="mt-2.5 space-y-1.5 text-xs text-[var(--muted-foreground)]">
-                    ${meal.items.map(item => `
-                      <li class="flex items-start gap-1.5">
-                        <span class="text-amber-500">•</span>
-                        <span>${item}</span>
-                      </li>
-                    `).join('')}
-                  </ul>
-
-                  <!-- Nota Médica / Nutricional -->
-                  ${meal.notes ? `
-                    <div class="mt-2.5 p-2 rounded-lg bg-[var(--accent)]/40 text-[11px] text-[var(--muted-foreground)] border-l-2 border-amber-500">
-                      💡 ${meal.notes}
-                    </div>
-                  ` : ''}
+                <span class="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-base">💊</span>
+                <div>
+                  <h3 class="font-bold text-xs sm:text-sm text-[var(--foreground)]">Protocolo Levotiroxina</h3>
+                  <span class="text-[10px] font-mono text-purple-400 font-bold">06:30 – 07:00 hrs</span>
                 </div>
-
-                <!-- Checkbox Comida Realizada -->
-                <button 
-                  data-meal="${meal.id}" 
-                  class="btn-toggle-meal shrink-0 w-8 h-8 rounded-xl font-bold flex items-center justify-center transition-all ${isDone 
-                    ? 'bg-emerald-500 text-slate-950 shadow-sm' 
-                    : 'bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)] hover:bg-[var(--border)]'}">
-                  ${isDone ? '✓' : '○'}
-                </button>
               </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">Absorción &gt;85%</span>
             </div>
-          `;
-        }).join('')}
+            <ul class="space-y-1.5 text-xs text-[var(--muted-foreground)] mt-2">
+              <li class="flex items-start gap-1.5">
+                <span class="text-purple-400 font-bold">•</span>
+                <span>Ingerir en ayunas únicamente con <b>250–300 ml de agua pura</b>.</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="text-purple-400 font-bold">•</span>
+                <span>Esperar <b>60 a 90 minutos</b> antes de tomar café, té o desayunar.</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="text-purple-400 font-bold">•</span>
+                <span>Aportar <b>Selenio y Zinc</b> en el desayuno (2 castañas de Pará o semillas).</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Pilar 2: Distribución de Hidratación 3.0L -->
+        <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-base">💧</span>
+                <div>
+                  <h3 class="font-bold text-xs sm:text-sm text-[var(--foreground)]">Pauta de Hidratación</h3>
+                  <span class="text-[10px] font-mono text-blue-400 font-bold">Meta Base: ${(nutritionData.targetWaterMl / 1000).toFixed(1)} Litros / día</span>
+                </div>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">Distribución</span>
+            </div>
+            <ul class="space-y-1.5 text-xs text-[var(--muted-foreground)] mt-2">
+              <li class="flex items-start gap-1.5">
+                <span class="text-blue-400 font-bold">•</span>
+                <span><b>Mañana (07:00 – 12:00):</b> ~1.0 L (incluye vaso de ayuno + media mañana).</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="text-blue-400 font-bold">•</span>
+                <span><b>Tarde (13:00 – 17:30):</b> ~1.0 L entre el almuerzo y el pre-entreno.</span>
+              </li>
+              <li class="flex items-start gap-1.5">
+                <span class="text-blue-400 font-bold">•</span>
+                <span><b>Gimnasio y Cena (18:00 – 21:00):</b> ~1.0 L durante las máquinas, cardio y cena.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- LISTADO DE COMIDAS DEL DÍA -->
+      <div class="space-y-3">
+        <div class="flex items-center justify-between px-1">
+          <h3 class="text-xs uppercase font-bold tracking-wider text-[var(--muted-foreground)]">
+            Estructura Diaria de Comidas (Alineada al Entreno 18:00 hrs)
+          </h3>
+          <span class="text-[10px] text-[var(--muted-foreground)]">${nutritionData.meals.filter(m => m.id !== 'medication').length} Tiempos de Comida</span>
+        </div>
+
+        ${nutritionData.meals.filter(meal => meal.id !== 'medication').map((meal, idx) => `
+          <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]/60">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  #${idx + 1} • ${meal.time}
+                </span>
+                <h4 class="font-bold text-sm text-[var(--foreground)]">${meal.name}</h4>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                🎯 ${meal.badge}
+              </span>
+            </div>
+
+            <!-- Lista de Alimentos -->
+            <ul class="mt-3 space-y-2 text-xs text-[var(--foreground)]/90">
+              ${meal.items.map(item => `
+                <li class="flex items-start gap-2">
+                  <span class="text-amber-500 font-bold mt-0.5">▸</span>
+                  <span class="leading-relaxed">${item}</span>
+                </li>
+              `).join('')}
+            </ul>
+
+            <!-- Nota Médica / Nutricional -->
+            ${meal.notes ? `
+              <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 text-[11px] text-[var(--muted-foreground)] border-l-2 border-amber-500">
+                💡 <b class="text-[var(--foreground)]">Clave fisiológica:</b> ${meal.notes}
+              </div>
+            ` : ''}
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- GUÍA RÁPIDA DE EQUIVALENCIAS E INTERCAMBIOS -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs space-y-3">
+        <div>
+          <h3 class="text-sm font-bold text-[var(--foreground)]">Guía Rápida de Intercambios Equivalentes</h3>
+          <p class="text-xs text-[var(--muted-foreground)]">Opciones intercambiables para variar tus menús manteniendo las calorías y macros exactos</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          <!-- Proteínas -->
+          <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
+            <span class="text-[11px] font-extrabold text-blue-400 block">🥩 ~35-40g Proteína Magra</span>
+            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+              <li>• 170-180g Pechuga de pollo o pavo</li>
+              <li>• 190g Pescado blanco (merluza/reineta)</li>
+              <li>• 150g Salmón o atún al agua (2 latas)</li>
+              <li>• 170g Posta rosada / asiento magro</li>
+            </ul>
+          </div>
+
+          <!-- Carbohidratos -->
+          <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
+            <span class="text-[11px] font-extrabold text-amber-400 block">🍚 ~30-35g Carbohidratos</span>
+            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+              <li>• 100-120g Arroz o quinoa cocida</li>
+              <li>• 150-170g Papa o camote al horno/airfryer</li>
+              <li>• 2 rebanadas Pan 100% integral</li>
+              <li>• 45g Avena tradicional en hojuelas</li>
+            </ul>
+          </div>
+
+          <!-- Grasas Buenas -->
+          <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
+            <span class="text-[11px] font-extrabold text-emerald-400 block">🥑 ~10-12g Grasas Saludables</span>
+            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+              <li>• 1 cda sopera (10 ml) Aceite de Oliva</li>
+              <li>• 1/2 Palta Hass mediana (~70g)</li>
+              <li>• 2 huevos enteros (proteína + grasa)</li>
+              <li>• 2 Castañas de Pará + 1 cda semillas</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
     </div>
   `;
-
-  attachNutritionEvents(container, todayLog, nutritionData);
 }
 
-function attachNutritionEvents(container, todayLog, nutritionData) {
-  // Medicación toggle
-  const btnMed = container.querySelector('#btnToggleMed');
-  if (btnMed) {
-    btnMed.addEventListener('click', () => {
-      todayLog.medicationTaken = !todayLog.medicationTaken;
-      db.saveTodayNutrition(todayLog);
-      renderNutritionModule(container);
-    });
-  }
-
-  // Agua +250ml
-  const btnAdd250 = container.querySelector('#btnAddWater250');
-  if (btnAdd250) {
-    btnAdd250.addEventListener('click', () => {
-      todayLog.waterMl = (todayLog.waterMl || 0) + 250;
-      db.saveTodayNutrition(todayLog);
-      updateWaterUI(container, todayLog.waterMl, nutritionData.targetWaterMl);
-    });
-  }
-
-  // Agua +500ml
-  const btnAdd500 = container.querySelector('#btnAddWater500');
-  if (btnAdd500) {
-    btnAdd500.addEventListener('click', () => {
-      todayLog.waterMl = (todayLog.waterMl || 0) + 500;
-      db.saveTodayNutrition(todayLog);
-      updateWaterUI(container, todayLog.waterMl, nutritionData.targetWaterMl);
-    });
-  }
-
-  // Agua -250ml
-  const btnSub250 = container.querySelector('#btnSubWater250');
-  if (btnSub250) {
-    btnSub250.addEventListener('click', () => {
-      todayLog.waterMl = Math.max(0, (todayLog.waterMl || 0) - 250);
-      db.saveTodayNutrition(todayLog);
-      updateWaterUI(container, todayLog.waterMl, nutritionData.targetWaterMl);
-    });
-  }
-
-  // Toggle Comidas
-  container.querySelectorAll('.btn-toggle-meal').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const mealId = btn.getAttribute('data-meal');
-      if (!todayLog.completedMeals) todayLog.completedMeals = {};
-      todayLog.completedMeals[mealId] = !todayLog.completedMeals[mealId];
-      db.saveTodayNutrition(todayLog);
-      renderNutritionModule(container);
-    });
-  });
-}
-
-function updateWaterUI(container, currentMl, targetMl) {
-  const textEl = container.querySelector('#waterCounterText');
-  const barEl = container.querySelector('#waterProgressBar');
-  const percent = Math.min(100, Math.round((currentMl / targetMl) * 100));
-
-  if (textEl) textEl.textContent = `${(currentMl / 1000).toFixed(2)} L`;
-  if (barEl) barEl.style.width = `${percent}%`;
-}

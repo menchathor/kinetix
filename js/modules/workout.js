@@ -236,6 +236,12 @@ export function renderWorkoutModule(container, preserveScroll = false) {
 
 // 1. Tarjeta de Ejercicio de Fuerza en Modo Previa
 function renderStaticExerciseCard(ex, exIndex, prevLog) {
+  const customWeight = db.getCustomWeight(ex.id);
+  const suggestion = db.getProgressiveOverloadSuggestion(ex);
+  const displayWeightBadge = customWeight !== null
+    ? `Meta: ${customWeight} lb`
+    : (prevLog ? `${prevLog.bestWeight} lb x ${prevLog.bestReps}` : (ex.baseWeight !== 'Pendiente' && ex.baseWeight !== 'Auto' ? `${ex.baseWeight} lb/placa` : 'Pendiente'));
+
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.id}">
       <div class="p-4">
@@ -259,12 +265,33 @@ function renderStaticExerciseCard(ex, exIndex, prevLog) {
           </div>
 
           <div class="text-right shrink-0">
-            <span class="text-[10px] text-[var(--muted-foreground)] block">Marca previa:</span>
+            <span class="text-[10px] text-[var(--muted-foreground)] block">${customWeight !== null ? 'Peso base activo:' : 'Marca previa:'}</span>
             <span class="text-xs font-mono font-bold px-2 py-1 rounded-lg bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] inline-block mt-0.5">
-              ${prevLog ? `${prevLog.bestWeight} lb x ${prevLog.bestReps}` : (ex.baseWeight !== 'Pendiente' && ex.baseWeight !== 'Auto' ? `${ex.baseWeight} lb/placa` : 'Pendiente')}
+              ${displayWeightBadge}
             </span>
           </div>
         </div>
+
+        ${suggestion && suggestion.shouldUpgrade ? `
+          <div class="mt-3 p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-emerald-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-start sm:items-center gap-2">
+              <span class="text-base shrink-0">🔥</span>
+              <div class="leading-tight">
+                <span class="font-extrabold text-amber-400 block">Smart Coach • Sobrecarga Progresiva</span>
+                <span class="text-[11px] text-[var(--muted-foreground)]">
+                  Dominaste <b>${suggestion.previousWeight} lb × ${suggestion.previousReps} reps</b> (tope de ${suggestion.targetRepRange}). Sugerido: <b class="text-emerald-400">${suggestion.nextWeight} lb</b> (+${suggestion.increment} lb).
+                </span>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              class="btn-apply-smart-coach shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] shadow-xs transition-all"
+              data-id="${ex.id}"
+              data-weight="${suggestion.nextWeight}">
+              ⚡ Subir a ${suggestion.nextWeight} lb
+            </button>
+          </div>
+        ` : ''}
 
         <!-- Botón colapsable para Ver Imagen y Tips Técnicos -->
         <div class="mt-3">
@@ -335,7 +362,7 @@ function renderStaticCardioCard(ex, exIndex) {
             <span class="text-amber-500">💡</span> ¿Por qué va siempre al final de las máquinas?
           </p>
           <p class="text-[11px] leading-relaxed">
-            1. <b>Protege tu fuerza y tus 37 kg de masa muscular:</b> Las pesas requieren glucógeno intacto.<br>
+            1. <b>Protege tu fuerza y tus 58.3 kg de masa magra:</b> Las pesas requieren glucógeno intacto.<br>
             2. <b>Quema máxima de grasa visceral:</b> Tras las máquinas, tu glucosa e insulina están bajas, por lo que el cardio en Zona 2 fuerza al organismo a consumir directamente los depósitos grasos del tronco.
           </p>
           <div class="pt-1 text-[11px] text-[var(--foreground)]">
@@ -349,6 +376,10 @@ function renderStaticCardioCard(ex, exIndex) {
 
 // 3. Tarjeta de Ejercicio de Fuerza en Vivo (Pendiente)
 function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
+  const suggestion = db.getProgressiveOverloadSuggestion({ ...def, id: ex.exerciseId });
+  const currentSetWeight = Number(ex.sets?.[0]?.weight) || 0;
+  const showSuggestion = suggestion && suggestion.shouldUpgrade && currentSetWeight < suggestion.nextWeight;
+
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.exerciseId}">
       <!-- Cabecera -->
@@ -380,6 +411,28 @@ function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
             </span>
           </div>
         </div>
+
+        ${showSuggestion ? `
+          <div class="mt-3 p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 to-emerald-500/15 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-start sm:items-center gap-2">
+              <span class="text-base shrink-0">🔥</span>
+              <div class="leading-tight">
+                <span class="font-extrabold text-amber-400 block">Smart Coach • Subida de Placa Sugerida</span>
+                <span class="text-[11px] text-[var(--muted-foreground)]">
+                  Lograste <b>${suggestion.previousWeight} lb × ${suggestion.previousReps} reps</b>. ¿Aplicar <b class="text-emerald-400">${suggestion.nextWeight} lb</b> (+${suggestion.increment} lb) a tus series de hoy?
+                </span>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              class="btn-apply-smart-coach shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[11px] shadow-xs transition-all"
+              data-id="${ex.exerciseId}"
+              data-ex="${exIndex}"
+              data-weight="${suggestion.nextWeight}">
+              ⚡ Aplicar ${suggestion.nextWeight} lb
+            </button>
+          </div>
+        ` : ''}
 
         <!-- Tips colapsables -->
         <div class="mt-3">
@@ -675,6 +728,7 @@ function attachWorkoutEvents(container, currentDayId) {
   const btnStart = container.querySelector('#btnStartWorkout');
   if (btnStart) {
     btnStart.addEventListener('click', () => {
+      timer.requestWakeLock();
       state.startWorkout(currentDayId);
     });
   }
@@ -684,6 +738,8 @@ function attachWorkoutEvents(container, currentDayId) {
   if (btnFinish) {
     btnFinish.addEventListener('click', () => {
       if (confirm('¿Terminar y guardar la sesión de hoy?')) {
+        timer.stop();
+        timer.releaseWakeLock();
         state.finishWorkout();
         alert('¡Excelente trabajo, Michael! Sesión guardada en tu historial.');
       }
@@ -695,10 +751,41 @@ function attachWorkoutEvents(container, currentDayId) {
   if (btnCancel) {
     btnCancel.addEventListener('click', () => {
       if (confirm('¿Deseas descartar los cambios de esta sesión?')) {
+        timer.stop();
+        timer.releaseWakeLock();
         state.cancelWorkout();
       }
     });
   }
+
+  // Botón Smart Coach: Aplicar sobrecarga progresiva sugerida
+  container.querySelectorAll('.btn-apply-smart-coach').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exerciseId = btn.getAttribute('data-id');
+      const nextWeight = parseFloat(btn.getAttribute('data-weight'));
+      const exIndexAttr = btn.getAttribute('data-ex');
+
+      if (exerciseId && !isNaN(nextWeight)) {
+        db.setCustomWeight(exerciseId, nextWeight);
+
+        // Si estamos en una sesión en vivo, actualizar las series pendientes de este ejercicio
+        if (state.activeWorkout && exIndexAttr !== null) {
+          const exIndex = parseInt(exIndexAttr, 10);
+          const liveEx = state.activeWorkout.exercises[exIndex];
+          if (liveEx && liveEx.sets) {
+            liveEx.sets.forEach(s => {
+              if (!s.completed) {
+                s.weight = nextWeight;
+              }
+            });
+            db.saveActiveSession(state.activeWorkout);
+          }
+        }
+
+        renderWorkoutModule(container, true);
+      }
+    });
+  });
 
   // Inputs de peso y reps (GUARDADO SILENCIOSO: no re-renderiza ni cierra teclado)
   container.querySelectorAll('.input-set-field').forEach(input => {

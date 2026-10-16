@@ -1,4 +1,4 @@
-import { mutation } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
 // Sincronización masiva de datos locales a la nube
@@ -6,10 +6,12 @@ export const bulkSync = mutation({
   args: {
     workouts: v.optional(v.array(v.any())),
     measurements: v.optional(v.array(v.any())),
+    customWeights: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     let workoutsSynced = 0;
     let measurementsSynced = 0;
+    let customWeightsSynced = 0;
 
     if (args.workouts && Array.isArray(args.workouts)) {
       for (const w of args.workouts) {
@@ -64,13 +66,23 @@ export const bulkSync = mutation({
           .withIndex("by_date", (q) => q.eq("date", m.date))
           .first();
 
+        const numOrUndef = (val: any) => (val !== undefined && val !== null && val !== "" && !isNaN(Number(val)) ? Number(val) : undefined);
+
         const doc = {
           date: m.date,
           weightKg: Number(m.weightKg || m.weight) || 0,
-          bodyFatPercent: m.bodyFatPercent ? Number(m.bodyFatPercent) : (m.fatPercent ? Number(m.fatPercent) : undefined),
-          muscleMassKg: m.muscleMassKg ? Number(m.muscleMassKg) : (m.muscleMass ? Number(m.muscleMass) : undefined),
-          visceralFat: m.visceralFat !== undefined ? Number(m.visceralFat) : undefined,
-          waistCircumferenceCm: m.waistCircumferenceCm ? Number(m.waistCircumferenceCm) : undefined,
+          bodyFatPercent: numOrUndef(m.bodyFatPercent ?? m.fatPercent),
+          fatMassKg: numOrUndef(m.fatMassKg ?? m.fatMass),
+          fatFreeMass: numOrUndef(m.fatFreeMass),
+          muscleMassKg: numOrUndef(m.muscleMassKg ?? m.muscleMass),
+          trunkFat: numOrUndef(m.trunkFat),
+          visceralFat: numOrUndef(m.visceralFat),
+          waterPercent: numOrUndef(m.waterPercent),
+          waterLitres: numOrUndef(m.waterLitres),
+          bmr: numOrUndef(m.bmr),
+          appendicularLeanIndex: numOrUndef(m.appendicularLeanIndex),
+          boneMass: numOrUndef(m.boneMass),
+          waistCircumferenceCm: numOrUndef(m.waistCircumferenceCm ?? m.waist),
           notes: m.notes || "",
           source: m.source || "Manual",
           createdAt: m.date ? new Date(m.date).getTime() : Date.now(),
@@ -85,6 +97,73 @@ export const bulkSync = mutation({
       }
     }
 
-    return { success: true, workoutsSynced, measurementsSynced };
+    if (args.customWeights && typeof args.customWeights === "object") {
+      for (const [exerciseId, weightVal] of Object.entries(args.customWeights)) {
+        const weight = Number(weightVal);
+        if (!exerciseId || isNaN(weight)) continue;
+
+        const existing = await ctx.db
+          .query("custom_weights")
+          .withIndex("by_exerciseId", (q) => q.eq("exerciseId", exerciseId))
+          .first();
+
+        if (existing) {
+          await ctx.db.patch(existing._id, {
+            weight,
+            updatedAt: Date.now(),
+          });
+        } else {
+          await ctx.db.insert("custom_weights", {
+            exerciseId,
+            weight,
+            updatedAt: Date.now(),
+          });
+        }
+        customWeightsSynced++;
+      }
+    }
+
+    return { success: true, workoutsSynced, measurementsSynced, customWeightsSynced };
+  },
+});
+
+// Guardar peso base personalizado individual
+export const saveCustomWeight = mutation({
+  args: {
+    exerciseId: v.string(),
+    weight: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("custom_weights")
+      .withIndex("by_exerciseId", (q) => q.eq("exerciseId", args.exerciseId))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        weight: args.weight,
+        updatedAt: Date.now(),
+      });
+      return existing._id;
+    } else {
+      return await ctx.db.insert("custom_weights", {
+        exerciseId: args.exerciseId,
+        weight: args.weight,
+        updatedAt: Date.now(),
+      });
+    }
+  },
+});
+
+// Obtener todos los pesos personalizados
+export const listCustomWeights = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("custom_weights").collect();
+    const map: Record<string, number> = {};
+    for (const r of rows) {
+      map[r.exerciseId] = r.weight;
+    }
+    return map;
   },
 });

@@ -8,6 +8,7 @@ let exerciseChartInstance = null;
 export function renderAnalyticsModule(container) {
   const measurements = db.getMeasurements();
   const workoutLogs = db.getWorkoutLogs();
+  const allExercises = db.getAllExercisesAnalytics();
 
   // Buscar mediciones InBody clínicas y datos actuales
   const inbodyMeas = measurements.find(m => m.source?.toLowerCase().includes('inbody')) || measurements[0] || {};
@@ -16,6 +17,27 @@ export function renderAnalyticsModule(container) {
   const weightDiff = (currentWeight - initialWeight).toFixed(1);
   const visceralLevel = inbodyMeas.visceralFat || INITIAL_DATA.profile.visceralFat || 8;
   const leanMass = inbodyMeas.fatFreeMass || INITIAL_DATA.profile.fatFreeMass || 58.3;
+
+  // Agrupar todos los ejercicios por rutina para el selector completo
+  const routinesOrder = [
+    { id: 'torso1', label: '🏋️ Torso 1 (Lunes)' },
+    { id: 'pierna1', label: '🦵 Pierna 1 (Martes)' },
+    { id: 'torso2', label: '💪 Torso 2 (Jueves)' },
+    { id: 'pierna2', label: '🔥 Pierna 2 (Viernes)' }
+  ];
+
+  const exerciseOptionsHtml = routinesOrder.map(rGroup => {
+    const groupItems = allExercises.filter(ex => ex.routineId === rGroup.id);
+    if (groupItems.length === 0) return '';
+    return `
+      <optgroup label="${rGroup.label}">
+        ${groupItems.map(ex => {
+          const w = ex.stats?.targetWeight || ex.stats?.prWeight || ex.baseWeight || 0;
+          return `<option value="${ex.id}">${ex.name} (${w && w !== 'Auto' ? w + ' lb' : 'Peso libre'})</option>`;
+        }).join('')}
+      </optgroup>
+    `;
+  }).join('');
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -28,7 +50,7 @@ export function renderAnalyticsModule(container) {
             <p class="text-xs text-[var(--muted-foreground)]">Seguimiento de peso, grasa visceral y sobrecarga progresiva</p>
           </div>
           <button id="btnOpenNewMeasurementModal" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition-all">
-            + Registrar Peso / Cintura
+            + Nueva Medición
           </button>
         </div>
 
@@ -215,26 +237,15 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- GRÁFICA 2: SOBRECARGA PROGRESIVA POR EJERCICIO -->
+      <!-- GRÁFICA 2: SOBRECARGA PROGRESIVA POR EJERCICIO (TODAS LAS MÁQUINAS) -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Sobrecarga Progresiva por Máquina</h3>
-            <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones sesión a sesión</p>
+            <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones de las ${allExercises.length} máquinas del programa</p>
           </div>
-          <select id="selectExerciseForChart" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium">
-            <option value="chest_press">Press Pecho Máquina (40)</option>
-            <option value="pec_deck">Mariposa Pectoral (Pec Deck) (47)</option>
-            <option value="lat_pulldown">Tracción Lateral Superior / Jalón (47)</option>
-            <option value="lat_pulldown_neutral">Tracción Dorsal Fija (40)</option>
-            <option value="cable_row">Remo Sentado / Soporte (33)</option>
-            <option value="shoulder_press">Press Hombro Máquina (25)</option>
-            <option value="leg_press">Prensa de Piernas (75)</option>
-            <option value="leg_extension">Extensión Piernas (47)</option>
-            <option value="leg_curl">Contracción Piernas / Curl (46)</option>
-            <option value="hip_thrust_machine">Hip & Glute (89)</option>
-            <option value="biceps_cable_curl">Bíceps Polea Baja (21)</option>
-            <option value="triceps_pushdown">Tríceps Polea Alta (18)</option>
+          <select id="selectExerciseForChart" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium max-w-full sm:max-w-xs">
+            ${exerciseOptionsHtml}
           </select>
         </div>
         <div class="h-56 relative">
@@ -242,59 +253,192 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- HISTORIAL DE SESIONES COMPLETADAS -->
+      <!-- HISTORIAL DE SESIONES COMPLETADAS (EXPANDIBLE Y EDITABLE) -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <h3 class="text-sm font-bold text-[var(--foreground)] mb-3">Historial de Entrenamientos</h3>
-        <div class="space-y-2">
-          ${workoutLogs.map(log => `
-            <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] flex items-center justify-between text-xs">
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="font-bold text-[var(--foreground)]">${log.routineName || 'Sesión'}</span>
-                  <span class="text-[10px] text-[var(--muted-foreground)]">${formatDisplayDate(log)}</span>
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="text-sm font-bold text-[var(--foreground)]">Historial de Entrenamientos</h3>
+            <p class="text-xs text-[var(--muted-foreground)]">Toca una sesión para desplegar el detalle de ejercicios y cargas</p>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
+            ${workoutLogs.length} Sesiones
+          </span>
+        </div>
+
+        <div class="space-y-2.5">
+          ${workoutLogs.map((log, logIdx) => {
+            const sessionId = log.id || log.sessionId || `idx_${logIdx}`;
+            const exercisesList = log.exercises || [];
+            const strengthExercises = exercisesList.filter(e => !e.isCardio);
+            const cardioEx = exercisesList.find(e => e.isCardio);
+            const hasCardio = log.cardioDone || (cardioEx && cardioEx.sets && cardioEx.sets.some(s => s.completed));
+
+            return `
+              <div class="rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] overflow-hidden text-xs transition-all">
+                <!-- Cabecera clicable del acordeón -->
+                <div class="p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-[var(--accent)]/70 transition-colors btn-toggle-workout-detail" data-target="workout-detail-${logIdx}">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-bold text-[var(--foreground)] text-xs sm:text-sm">${log.routineName || 'Sesión'}</span>
+                      <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)]">
+                        ${formatDisplayDate(log)}
+                      </span>
+                      ${hasCardio ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold">🏃 Cardio ✓</span>` : ''}
+                    </div>
+                    <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
+                      ${strengthExercises.length} máquinas registradas ${log.durationMinutes ? `• ${log.durationMinutes} min` : ''}
+                    </p>
+                  </div>
+
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="text-[11px] font-semibold text-amber-500 flex items-center gap-1">
+                      <span>Detalle</span>
+                      <span class="text-[9px] transition-transform" id="arrow-workout-detail-${logIdx}">▼</span>
+                    </span>
+                  </div>
                 </div>
-                <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-                  ${log.exercises?.length || 0} ejercicios completados ${log.durationMinutes ? `• ${log.durationMinutes} min` : ''}
-                </p>
+
+                <!-- Cuerpo expandible con desglose de series y botón eliminar -->
+                <div id="workout-detail-${logIdx}" class="hidden px-3 pb-3 pt-2 border-t border-[var(--border)]/60 bg-[var(--card)]/50 space-y-2">
+                  ${exercisesList.length > 0 ? `
+                    <div class="space-y-1.5">
+                      ${exercisesList.map(ex => {
+                        const completedSets = (ex.sets || []).filter(s => s.completed);
+                        const setsToShow = completedSets.length > 0 ? completedSets : (ex.sets || []);
+                        const isCardioItem = !!ex.isCardio;
+                        const setsText = isCardioItem
+                          ? `${setsToShow[0]?.weight || 20} min Zona 2`
+                          : setsToShow.map(s => `${s.weight || 0} lb × ${s.reps || 0}`).join(' • ');
+
+                        return `
+                          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1.5 px-2.5 rounded-lg bg-[var(--accent)]/40 border border-[var(--border)]/50">
+                            <span class="font-semibold text-[var(--foreground)] text-[11px]">
+                              ${isCardioItem ? '🏃 ' : '🏋️ '}${ex.exerciseName || ex.exerciseId}
+                            </span>
+                            <span class="font-mono text-[11px] text-amber-400 font-bold">
+                              ${setsText || 'Sin series'}
+                            </span>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  ` : `<p class="text-[11px] text-[var(--muted-foreground)]">Sin desglose de ejercicios en esta sesión.</p>`}
+
+                  ${log.notes ? `<p class="text-[11px] text-[var(--muted-foreground)] italic pt-1">Nota: ${log.notes}</p>` : ''}
+
+                  <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/50">
+                    <span class="text-[10px] font-mono text-[var(--muted-foreground)]">ID: ${sessionId}</span>
+                    ${sessionId !== 'session_baseline_20260910' ? `
+                      <button 
+                        type="button" 
+                        class="btn-delete-workout-session text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all flex items-center gap-1"
+                        data-session-id="${sessionId}"
+                        data-routine-name="${log.routineName || 'Sesión'}">
+                        🗑️ Eliminar sesión
+                      </button>
+                    ` : `<span class="text-[10px] text-blue-400 font-semibold">📌 Sesión Base Protegida</span>`}
+                  </div>
+                </div>
               </div>
-              <span class="font-mono text-emerald-400 text-xs font-bold">✓ Guardado</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       </div>
 
-      <!-- MODAL PARA NUEVA MEDICIÓN (Oculto por defecto) -->
-      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-sm w-full space-y-4 shadow-xl">
-          <div class="flex items-center justify-between">
-            <h3 class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
-            <button id="btnCloseMeasModal" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-sm font-bold">✕</button>
+      <!-- MODAL COMPLETO PARA NUEVA MEDICIÓN CORPORAL / INBODY -->
+      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
+          <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+            <div>
+              <h3 class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
+              <p class="text-[11px] text-[var(--muted-foreground)]">Registra control InBody Smart Fit o pesaje Eufy en hogar</p>
+            </div>
+            <button id="btnCloseMeasModal" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-sm font-bold p-1">✕</button>
           </div>
 
-          <div class="space-y-3 text-xs">
-            <div>
-              <label class="font-bold text-[var(--foreground)] block mb-1">Peso en Báscula (kg)</label>
-              <input type="number" step="0.1" id="inputMeasWeight" placeholder="Ej: 84.5" class="w-full p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+          <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">
+            <!-- Fila 1: Fecha y Fuente -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Fecha</label>
+                <input type="date" id="inputMeasDate" value="${new Date().toLocaleDateString('en-CA')}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Equipo / Fuente</label>
+                <select id="inputMeasSource" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-medium">
+                  <option value="Eufy Life (Báscula hogar)">🏠 Eufy Life (Hogar)</option>
+                  <option value="Smart Fit (InBody multicanal)">🏥 InBody (Smart Fit)</option>
+                  <option value="Manual">📝 Registro Manual</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label class="font-bold text-[var(--foreground)] block mb-1">Circunferencia Cintura (cm, altura ombligo)</label>
-              <input type="number" step="0.5" id="inputMeasWaist" placeholder="Opcional pero recomendado" class="w-full p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+
+            <!-- Fila 2: Peso y % Grasa -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Peso Corporal (kg) *</label>
+                <input type="number" step="0.1" id="inputMeasWeight" placeholder="Ej: 82.2" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">% Grasa Corporal</label>
+                <input type="number" step="0.1" id="inputMeasFatPercent" placeholder="Ej: 23.2" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
             </div>
-            <div>
-              <label class="font-bold text-[var(--foreground)] block mb-1">Grasa Visceral (Nivel en báscula)</label>
-              <input type="number" id="inputMeasVisceral" placeholder="Ej: 9 o 13" class="w-full p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+
+            <!-- Fila 3: Masa Grasa (kg) y Masa Libre de Grasa / Magra (kg) -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Masa Grasa (kg)</label>
+                <input type="number" step="0.1" id="inputMeasFatMass" placeholder="Ej: 19.1" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Masa Libre Grasa (kg)</label>
+                <input type="number" step="0.1" id="inputMeasFatFreeMass" placeholder="Ej: 58.3" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
             </div>
-            <div>
-              <label class="font-bold text-[var(--foreground)] block mb-1">Notas / Fuente</label>
-              <input type="text" id="inputMeasNotes" placeholder="Ej: Eufy sábado en ayunas" class="w-full p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+
+            <!-- Fila 4: Músculo Esquelético y Grasa Troncal -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Músculo Esquelético (kg)</label>
+                <input type="number" step="0.1" id="inputMeasMuscleMass" placeholder="Ej: 36.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Grasa en Tronco (kg)</label>
+                <input type="number" step="0.01" id="inputMeasTrunkFat" placeholder="Ej: 13.97" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <!-- Fila 5: Grasa Visceral y TMB -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Grasa Visceral (Nivel)</label>
+                <input type="number" id="inputMeasVisceral" placeholder="Ej: 8" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">TMB Basal (kcal)</label>
+                <input type="number" id="inputMeasBmr" placeholder="Ej: 1817" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <!-- Fila 6: Cintura y Notas -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Cintura (cm)</label>
+                <input type="number" step="0.5" id="inputMeasWaist" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label class="font-bold text-[var(--foreground)] block mb-1">Notas adicionales</label>
+                <input type="text" id="inputMeasNotes" placeholder="Ej: En ayunas 07:15" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+              </div>
             </div>
           </div>
 
-          <div class="flex gap-2 pt-2">
-            <button id="btnSaveMeasurement" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2 rounded-xl text-xs transition-all">
-              Guardar Medición
+          <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+            <button id="btnSaveMeasurement" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
+              Guardar y Sincronizar
             </button>
-            <button id="btnCancelMeasModal" class="px-3 py-2 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+            <button id="btnCancelMeasModal" class="px-4 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
               Cancelar
             </button>
           </div>
@@ -306,7 +450,8 @@ export function renderAnalyticsModule(container) {
 
   attachAnalyticsEvents(container, measurements, workoutLogs);
   initWeightChart(measurements);
-  initExerciseChart(workoutLogs, 'chest_press');
+  const initialExId = container.querySelector('#selectExerciseForChart')?.value || 'chest_press';
+  initExerciseChart(workoutLogs, initialExId);
 }
 
 function attachAnalyticsEvents(container, measurements, workoutLogs) {
@@ -329,10 +474,18 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
 
   if (btnSave && modal) {
     btnSave.addEventListener('click', () => {
-      const weight = parseFloat(container.querySelector('#inputMeasWeight').value);
-      const waist = parseFloat(container.querySelector('#inputMeasWaist').value) || null;
-      const visceral = parseInt(container.querySelector('#inputMeasVisceral').value) || null;
-      const notes = container.querySelector('#inputMeasNotes').value || 'Registro semanal';
+      const dateVal = container.querySelector('#inputMeasDate')?.value || new Date().toLocaleDateString('en-CA');
+      const sourceVal = container.querySelector('#inputMeasSource')?.value || 'Manual';
+      const weight = parseFloat(container.querySelector('#inputMeasWeight')?.value);
+      const fatPercent = parseFloat(container.querySelector('#inputMeasFatPercent')?.value) || undefined;
+      const fatMass = parseFloat(container.querySelector('#inputMeasFatMass')?.value) || undefined;
+      const fatFreeMass = parseFloat(container.querySelector('#inputMeasFatFreeMass')?.value) || undefined;
+      const muscleMass = parseFloat(container.querySelector('#inputMeasMuscleMass')?.value) || undefined;
+      const trunkFat = parseFloat(container.querySelector('#inputMeasTrunkFat')?.value) || undefined;
+      const visceral = parseInt(container.querySelector('#inputMeasVisceral')?.value, 10) || undefined;
+      const bmr = parseFloat(container.querySelector('#inputMeasBmr')?.value) || undefined;
+      const waist = parseFloat(container.querySelector('#inputMeasWaist')?.value) || undefined;
+      const notes = container.querySelector('#inputMeasNotes')?.value || '';
 
       if (!weight || isNaN(weight)) {
         alert('Por favor ingresa un peso válido en kg.');
@@ -340,11 +493,22 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
       }
 
       db.addMeasurement({
-        date: new Date().toLocaleDateString('en-CA'),
-        source: notes,
+        date: dateVal,
+        source: sourceVal,
         weight,
-        waistCm: waist,
-        visceralFat: visceral
+        weightKg: weight,
+        fatPercent,
+        bodyFatPercent: fatPercent,
+        fatMass,
+        fatMassKg: fatMass,
+        fatFreeMass,
+        muscleMass,
+        muscleMassKg: muscleMass,
+        trunkFat,
+        visceralFat: visceral,
+        bmr,
+        waistCircumferenceCm: waist,
+        notes
       });
 
       modal.classList.add('hidden');
@@ -357,6 +521,33 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
       initExerciseChart(workoutLogs, e.target.value);
     });
   }
+
+  // Acordeón para expandir/colapsar el detalle de cada sesión de entrenamiento
+  container.querySelectorAll('.btn-toggle-workout-detail').forEach(header => {
+    header.addEventListener('click', () => {
+      const targetId = header.getAttribute('data-target');
+      const detailEl = container.querySelector(`#${targetId}`);
+      const arrowEl = container.querySelector(`#arrow-${targetId}`);
+      if (detailEl) {
+        const isHidden = detailEl.classList.contains('hidden');
+        detailEl.classList.toggle('hidden');
+        if (arrowEl) arrowEl.textContent = isHidden ? '▲' : '▼';
+      }
+    });
+  });
+
+  // Botón para eliminar una sesión de entrenamiento
+  container.querySelectorAll('.btn-delete-workout-session').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sessionId = btn.getAttribute('data-session-id');
+      const routineName = btn.getAttribute('data-routine-name');
+      if (sessionId && confirm(`¿Eliminar la sesión "${routineName}" del historial?`)) {
+        db.deleteWorkoutSession(sessionId);
+        renderAnalyticsModule(container);
+      }
+    });
+  });
 }
 
 function initWeightChart(measurements) {
@@ -472,9 +663,19 @@ function initExerciseChart(workoutLogs, exerciseId) {
   reversed.forEach(session => {
     if (session.exercises) {
       const ex = session.exercises.find(e => e.exerciseId === exerciseId);
-      if (ex && ex.sets) {
-        const bestSet = ex.sets.find(s => s.completed) || ex.sets[0];
-        if (bestSet && bestSet.weight) {
+      if (ex && ex.sets && ex.sets.length > 0) {
+        const completedSets = ex.sets.filter(s => s.completed);
+        const pool = completedSets.length > 0 ? completedSets : ex.sets;
+        // Seleccionar el set de mayor carga (o mayores reps a igual carga)
+        const bestSet = pool.reduce((best, cur) => {
+          const curW = parseFloat(cur.weight) || 0;
+          const bestW = parseFloat(best.weight) || 0;
+          if (curW > bestW) return cur;
+          if (curW === bestW && (parseInt(cur.reps) || 0) > (parseInt(best.reps) || 0)) return cur;
+          return best;
+        }, pool[0]);
+
+        if (bestSet && (bestSet.weight || bestSet.reps)) {
           const dateStr = session.date || (session.startTime ? session.startTime.split('T')[0] : '');
           if (dateStr) {
             labels.push(dateStr.slice(5, 10));
@@ -486,6 +687,9 @@ function initExerciseChart(workoutLogs, exerciseId) {
     }
   });
 
+  const stats = db.getExerciseEvolutionStats(exerciseId);
+  const fallbackWeight = stats?.targetWeight || stats?.baselineWeight || 0;
+
   if (exerciseChartInstance) {
     exerciseChartInstance.destroy();
   }
@@ -493,11 +697,11 @@ function initExerciseChart(workoutLogs, exerciseId) {
   exerciseChartInstance = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: labels.length > 0 ? labels : ['Calibración Inicial'],
+      labels: labels.length > 0 ? labels : ['Base Configurada'],
       datasets: [
         {
           label: 'Carga (lb / placa)',
-          data: weights.length > 0 ? weights : [40],
+          data: weights.length > 0 ? weights : [fallbackWeight],
           backgroundColor: '#3b82f6',
           borderRadius: 6,
           yAxisID: 'y'

@@ -311,13 +311,28 @@ export class StorageService {
 
   addMeasurement(measurement) {
     const list = this.getMeasurements();
-    measurement.id = 'meas_' + Date.now();
-    list.unshift(measurement);
+    measurement.id = measurement.id || 'meas_' + Date.now();
+    const existingIdx = list.findIndex(m => m.date === measurement.date);
+    if (existingIdx >= 0) {
+      list[existingIdx] = { ...list[existingIdx], ...measurement };
+    } else {
+      list.unshift(measurement);
+    }
+    list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(list));
     convex.syncMeasurement(measurement).catch(err => {
       console.warn('[Convex] Error sincronizando medición:', err);
     });
     return measurement;
+  }
+
+  deleteMeasurement(date) {
+    let list = this.getMeasurements();
+    list = list.filter(m => m.date !== date);
+    localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(list));
+    convex.mutation('measurements:deleteMeasurement', { date }).catch(err => {
+      console.warn('[Convex] Error eliminando medición en la nube:', err);
+    });
   }
 
   // --- CONFIGURACIÓN & CLOUD ---
@@ -343,23 +358,26 @@ export class StorageService {
       // 1. Obtener datos locales actuales
       const localWorkouts = this.getWorkoutLogs();
       const localMeas = this.getMeasurements();
+      const localCustomWeights = this.getCustomWeights();
 
       // 2. Subir datos locales a Convex Cloud (Push preventivo)
       let pushRes = null;
       try {
-        pushRes = await convex.syncAllLocalData(localWorkouts, localMeas);
+        pushRes = await convex.syncAllLocalData(localWorkouts, localMeas, localCustomWeights);
       } catch (pushErr) {
         console.warn('[DB] Advertencia al subir datos locales a Convex:', pushErr);
       }
 
       // 3. Descargar todo el historial desde Convex Cloud (Pull)
-      const [cloudWorkoutsRes, cloudMeasRes] = await Promise.all([
+      const [cloudWorkoutsRes, cloudMeasRes, cloudCustomWeightsRes] = await Promise.all([
         convex.fetchCloudWorkouts(),
-        convex.fetchCloudMeasurements()
+        convex.fetchCloudMeasurements(),
+        convex.fetchCloudCustomWeights()
       ]);
 
       let importedWorkouts = 0;
       let importedMeas = 0;
+      let importedWeights = 0;
 
       // 4. Fusionar y normalizar entrenamientos
       if (cloudWorkoutsRes.success && Array.isArray(cloudWorkoutsRes.data)) {
@@ -417,7 +435,7 @@ export class StorageService {
         localStorage.setItem(KEYS.WORKOUT_LOGS, JSON.stringify(mergedWorkouts));
       }
 
-      // 5. Fusionar y normalizar mediciones
+      // 5. Fusionar y normalizar mediciones (incluyendo bioimpedancia completa)
       if (cloudMeasRes.success && Array.isArray(cloudMeasRes.data)) {
         const measMap = new Map();
 
@@ -436,9 +454,19 @@ export class StorageService {
             ...cm,
             weight: cm.weight !== undefined && cm.weight > 0 ? cm.weight : (cm.weightKg || existing.weight || 0),
             weightKg: cm.weightKg !== undefined && cm.weightKg > 0 ? cm.weightKg : (cm.weight || existing.weightKg || 0),
-            muscleMass: cm.muscleMass !== undefined ? cm.muscleMass : (cm.muscleMassKg || existing.muscleMass),
-            muscleMassKg: cm.muscleMassKg !== undefined ? cm.muscleMassKg : (cm.muscleMass || existing.muscleMassKg),
+            fatPercent: cm.bodyFatPercent ?? cm.fatPercent ?? existing.fatPercent ?? existing.bodyFatPercent,
+            bodyFatPercent: cm.bodyFatPercent ?? cm.fatPercent ?? existing.bodyFatPercent ?? existing.fatPercent,
+            fatMass: cm.fatMassKg ?? cm.fatMass ?? existing.fatMass ?? existing.fatMassKg,
+            fatMassKg: cm.fatMassKg ?? cm.fatMass ?? existing.fatMassKg ?? existing.fatMass,
+            fatFreeMass: cm.fatFreeMass ?? existing.fatFreeMass,
+            muscleMass: cm.muscleMass !== undefined ? cm.muscleMass : (cm.muscleMassKg ?? existing.muscleMass),
+            muscleMassKg: cm.muscleMassKg !== undefined ? cm.muscleMassKg : (cm.muscleMass ?? existing.muscleMassKg),
+            trunkFat: cm.trunkFat ?? existing.trunkFat,
             visceralFat: cm.visceralFat !== undefined ? cm.visceralFat : (existing.visceralFat || 0),
+            waterPercent: cm.waterPercent ?? existing.waterPercent,
+            waterLitres: cm.waterLitres ?? existing.waterLitres,
+            bmr: cm.bmr ?? existing.bmr,
+            waistCircumferenceCm: cm.waistCircumferenceCm ?? existing.waistCircumferenceCm,
             source: cm.source || existing.source || 'Manual'
           };
 
@@ -450,6 +478,19 @@ export class StorageService {
         localStorage.setItem(KEYS.MEASUREMENTS, JSON.stringify(mergedMeas));
       }
 
+      // 6. Fusionar pesos base personalizados (customWeights)
+      if (cloudCustomWeightsRes && cloudCustomWeightsRes.success && cloudCustomWeightsRes.data && typeof cloudCustomWeightsRes.data === 'object') {
+        const mergedWeights = { ...localCustomWeights };
+        for (const [exId, wVal] of Object.entries(cloudCustomWeightsRes.data)) {
+          const numW = Number(wVal);
+          if (!isNaN(numW) && numW > 0) {
+            if (mergedWeights[exId] === undefined) importedWeights++;
+            mergedWeights[exId] = numW;
+          }
+        }
+        localStorage.setItem(KEYS.CUSTOM_WEIGHTS, JSON.stringify(mergedWeights));
+      }
+
       const totalWorkouts = this.getWorkoutLogs().length;
       const totalMeas = this.getMeasurements().length;
 
@@ -459,6 +500,7 @@ export class StorageService {
         uploadedMeas: pushRes?.data?.measurementsSynced ?? 0,
         importedWorkouts,
         importedMeas,
+        importedWeights,
         totalWorkouts,
         totalMeas
       };
@@ -493,9 +535,70 @@ export class StorageService {
 
   setCustomWeight(exerciseId, weight) {
     const weights = this.getCustomWeights();
-    weights[exerciseId] = Number(weight) || 0;
+    const numericWeight = Number(weight) || 0;
+    weights[exerciseId] = numericWeight;
     localStorage.setItem(KEYS.CUSTOM_WEIGHTS, JSON.stringify(weights));
+
+    // Sincronizar con Convex Cloud en segundo plano
+    convex.syncCustomWeight(exerciseId, numericWeight).catch(err => {
+      console.warn('[Convex] Error sincronizando peso personalizado:', err);
+    });
+
     return weights;
+  }
+
+  // Sugerencia inteligente de sobrecarga progresiva ("Smart Coach")
+  getProgressiveOverloadSuggestion(exerciseDef) {
+    if (!exerciseDef || exerciseDef.isCardio) return null;
+    const exerciseId = exerciseDef.id || exerciseDef.exerciseId;
+    if (!exerciseId) return null;
+
+    const prevLog = this.getLastExerciseLog(exerciseId);
+    if (!prevLog || !prevLog.sets || prevLog.sets.length === 0) return null;
+
+    // Parsear el rango de repeticiones objetivo (ej. "8-10" -> min 8, max 10)
+    const repsStr = String(exerciseDef.defaultReps || '8-10');
+    const parts = repsStr.match(/\d+/g);
+    if (!parts || parts.length === 0) return null;
+    const minTargetReps = parseInt(parts[0], 10);
+    const maxTargetReps = parts.length > 1 ? parseInt(parts[1], 10) : minTargetReps;
+
+    const customW = this.getCustomWeight(exerciseId);
+    const defaultBaseW = Number(exerciseDef.baseWeight) || 0;
+    const currentTargetWeight = customW !== null ? Number(customW) : (prevLog.bestWeight || defaultBaseW);
+
+    if (!currentTargetWeight || currentTargetWeight <= 0) return null;
+
+    // Verificar si en la última sesión alcanzó o superó el tope de repeticiones con al menos el peso objetivo actual
+    const setsAtTargetWeight = prevLog.sets.filter(s => s.completed && (Number(s.weight) || 0) >= currentTargetWeight);
+    if (setsAtTargetWeight.length === 0) return null;
+
+    const bestRepsAtWeight = Math.max(...setsAtTargetWeight.map(s => Number(s.reps) || 0));
+    const allSetsMetMin = setsAtTargetWeight.every(s => (Number(s.reps) || 0) >= minTargetReps);
+
+    if (bestRepsAtWeight >= maxTargetReps && allSetsMetMin) {
+      // Determinar incremento sugerido (+5 lb para compuestos/pierna/espalda/pecho, +2.5 lb para aislamiento/brazos/hombros)
+      const smallIncrementIds = new Set([
+        'shoulder_press', 'shoulder_press_t2', 'lateral_raise_machine',
+        'rear_delt_face_pull', 'biceps_cable_curl', 'biceps_curl_t2',
+        'triceps_pushdown', 'triceps_extension_t2', 'ab_crunch_machine'
+      ]);
+      const increment = smallIncrementIds.has(exerciseId) ? 2.5 : 5;
+      const nextWeight = Math.round((currentTargetWeight + increment) * 10) / 10;
+
+      return {
+        shouldUpgrade: true,
+        exerciseId,
+        previousWeight: prevLog.bestWeight,
+        previousReps: bestRepsAtWeight,
+        targetRepRange: repsStr,
+        currentTargetWeight,
+        increment,
+        nextWeight
+      };
+    }
+
+    return null;
   }
 
   // Obtener estadísticas de evolución y bitácora para un ejercicio específico
@@ -621,7 +724,7 @@ export class StorageService {
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.12',
+      version: '1.13',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),

@@ -1,60 +1,134 @@
-// Temporizador de descanso flotante con soporte de Web Audio y vibración háptica
+// Temporizador de descanso flotante resiliente en segundo plano (Timestamp + Wake Lock + Web Audio + Háptica)
 export class RestTimer {
   constructor() {
     this.totalSeconds = 90;
     this.remainingSeconds = 90;
+    this.endTime = null;
     this.intervalId = null;
     this.isRunning = false;
+    this.wakeLock = null;
     this.onTickCallbacks = [];
     this.onCompleteCallbacks = [];
+
+    // Sincronizar inmediatamente al desbloquear pantalla o volver a la pestaña
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          if (this.isRunning && this.endTime) {
+            this.syncRemainingFromClock();
+          }
+          // Re-solicitar Wake Lock si hay temporizador o sesión activa
+          if (this.isRunning) {
+            this.requestWakeLock();
+          }
+        }
+      });
+    }
   }
 
   start(seconds = null) {
     if (seconds !== null) {
       this.totalSeconds = seconds;
       this.remainingSeconds = seconds;
+    } else if (this.remainingSeconds <= 0) {
+      this.remainingSeconds = this.totalSeconds || 90;
     }
-    this.stop();
+
+    this.clearTimerInterval();
     this.isRunning = true;
+    this.endTime = Date.now() + this.remainingSeconds * 1000;
+    this.requestWakeLock();
     this.notifyTick();
 
     this.intervalId = setInterval(() => {
-      this.remainingSeconds--;
-      this.notifyTick();
-
-      if (this.remainingSeconds <= 0) {
-        this.complete();
-      }
-    }, 1000);
+      this.syncRemainingFromClock();
+    }, 250);
   }
 
-  stop() {
+  syncRemainingFromClock() {
+    if (!this.isRunning || !this.endTime) return;
+    const msLeft = this.endTime - Date.now();
+    const nextSecs = Math.max(0, Math.ceil(msLeft / 1000));
+
+    if (nextSecs !== this.remainingSeconds) {
+      this.remainingSeconds = nextSecs;
+      this.notifyTick();
+    }
+
+    if (msLeft <= 0) {
+      this.complete();
+    }
+  }
+
+  clearTimerInterval() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
+  }
+
+  stop() {
+    if (this.isRunning && this.endTime) {
+      this.remainingSeconds = Math.max(0, Math.ceil((this.endTime - Date.now()) / 1000));
+    }
+    this.clearTimerInterval();
+    this.endTime = null;
     this.isRunning = false;
+    this.notifyTick();
   }
 
   addSeconds(secs = 15) {
     this.remainingSeconds += secs;
     this.totalSeconds = Math.max(this.totalSeconds, this.remainingSeconds);
+    if (this.isRunning && this.endTime) {
+      this.endTime += secs * 1000;
+    }
     this.notifyTick();
   }
 
   reset() {
-    this.stop();
+    this.clearTimerInterval();
+    this.endTime = null;
+    this.isRunning = false;
     this.remainingSeconds = this.totalSeconds;
     this.notifyTick();
   }
 
   complete() {
-    this.stop();
+    this.clearTimerInterval();
+    this.endTime = null;
+    this.isRunning = false;
     this.remainingSeconds = 0;
     this.notifyTick();
     this.playNotificationSound();
     this.triggerVibration();
     this.onCompleteCallbacks.forEach(cb => cb());
+  }
+
+  async requestWakeLock() {
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      try {
+        if (!this.wakeLock) {
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLock.addEventListener('release', () => {
+            this.wakeLock = null;
+          });
+        }
+      } catch {
+        // Ignorar silenciosamente si el navegador o modo ahorro de batería lo rechaza
+      }
+    }
+  }
+
+  async releaseWakeLock() {
+    if (this.wakeLock) {
+      try {
+        await this.wakeLock.release();
+        this.wakeLock = null;
+      } catch {
+        this.wakeLock = null;
+      }
+    }
   }
 
   onTick(cb) {

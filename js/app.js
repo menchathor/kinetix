@@ -181,8 +181,8 @@ class App {
     if (navigator.onLine) {
       try {
         const res = await db.syncTwoWay({ silent: true });
-        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0)) {
-          console.log(`[AutoSync] Datos sincronizados desde la nube (+${res.importedWorkouts} entrenamientos).`);
+        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0)) {
+          console.log(`[AutoSync] Datos sincronizados desde la nube (+${res.importedWorkouts} entrenos, +${res.importedWeights || 0} pesos).`);
           state.notify();
         }
       } catch (err) {
@@ -194,7 +194,7 @@ class App {
     window.addEventListener('online', async () => {
       try {
         const res = await db.syncTwoWay({ silent: true });
-        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0)) {
+        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0)) {
           console.log(`[AutoSync-Online] Sincronizados tras reconexión (+${res.importedWorkouts} entrenamientos).`);
           state.notify();
         }

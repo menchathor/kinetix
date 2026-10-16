@@ -162,13 +162,23 @@ class ConvexService {
   // Sincronizar nueva medición corporal
   async syncMeasurement(measurement) {
     if (!measurement || !measurement.date) return;
+    const numOrUndef = (val) => (val !== undefined && val !== null && val !== '' && !isNaN(Number(val)) ? Number(val) : undefined);
+
     const formatted = {
       date: measurement.date,
       weightKg: Number(measurement.weightKg || measurement.weight) || 0,
-      bodyFatPercent: measurement.bodyFatPercent ? Number(measurement.bodyFatPercent) : (measurement.fatPercent ? Number(measurement.fatPercent) : undefined),
-      muscleMassKg: measurement.muscleMassKg ? Number(measurement.muscleMassKg) : (measurement.muscleMass ? Number(measurement.muscleMass) : undefined),
-      visceralFat: measurement.visceralFat !== undefined ? Number(measurement.visceralFat) : undefined,
-      waistCircumferenceCm: measurement.waistCircumferenceCm ? Number(measurement.waistCircumferenceCm) : undefined,
+      bodyFatPercent: numOrUndef(measurement.bodyFatPercent ?? measurement.fatPercent),
+      fatMassKg: numOrUndef(measurement.fatMassKg ?? measurement.fatMass),
+      fatFreeMass: numOrUndef(measurement.fatFreeMass),
+      muscleMassKg: numOrUndef(measurement.muscleMassKg ?? measurement.muscleMass),
+      trunkFat: numOrUndef(measurement.trunkFat),
+      visceralFat: numOrUndef(measurement.visceralFat),
+      waterPercent: numOrUndef(measurement.waterPercent),
+      waterLitres: numOrUndef(measurement.waterLitres),
+      bmr: numOrUndef(measurement.bmr),
+      appendicularLeanIndex: numOrUndef(measurement.appendicularLeanIndex),
+      boneMass: numOrUndef(measurement.boneMass),
+      waistCircumferenceCm: numOrUndef(measurement.waistCircumferenceCm ?? measurement.waist),
       notes: measurement.notes || undefined,
       source: measurement.source || 'Manual',
     };
@@ -176,11 +186,21 @@ class ConvexService {
     return await this.mutation('measurements:save', formatted);
   }
 
+  // Sincronizar peso base personalizado individual
+  async syncCustomWeight(exerciseId, weight) {
+    if (!exerciseId || isNaN(Number(weight))) return;
+    return await this.mutation('sync:saveCustomWeight', {
+      exerciseId,
+      weight: Number(weight),
+    });
+  }
+
   // Sincronización masiva de todo el historial local a Convex
-  async syncAllLocalData(workouts, measurements) {
+  async syncAllLocalData(workouts, measurements, customWeights = {}) {
     return await this.mutation('sync:bulkSync', {
       workouts: workouts || [],
       measurements: measurements || [],
+      customWeights: customWeights || {},
     });
   }
 
@@ -192,6 +212,11 @@ class ConvexService {
   // Descargar mediciones desde la nube
   async fetchCloudMeasurements() {
     return await this.query('measurements:list', {});
+  }
+
+  // Descargar pesos personalizados desde la nube
+  async fetchCloudCustomWeights() {
+    return await this.query('sync:listCustomWeights', {});
   }
 }
 
