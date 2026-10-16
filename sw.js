@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (Cache & Offline Support)
-const CACHE_NAME = 'kinetix-v1.13';
+const CACHE_NAME = 'kinetix-v1.14';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -42,19 +42,33 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Cacheando recursos estáticos');
-      return cache.addAll(ASSETS_TO_CACHE).catch(err => console.warn('[SW] Error cacheando algunos assets:', err));
+    caches.open(CACHE_NAME).then(async (cache) => {
+      console.log('[SW] Descargando recursos frescos ignorando caché HTTP del teléfono...');
+      await Promise.all(
+        ASSETS_TO_CACHE.map(async (url) => {
+          try {
+            // cache: 'reload' fuerza al navegador móvil a ir al servidor y actualizar su caché HTTP
+            const req = new Request(url, { cache: 'reload' });
+            const res = await fetch(req);
+            if (res && res.ok) {
+              await cache.put(url, res);
+            }
+          } catch (err) {
+            console.warn('[SW] Error cacheando asset:', url, err);
+          }
+        })
+      );
     })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
             console.log('[SW] Eliminando caché antigua:', key);
@@ -62,37 +76,52 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+      await self.clients.claim();
+      // Notificar a todas las pestañas abiertas para que recarguen con la nueva versión
+      const clientList = await self.clients.matchAll({ type: 'window' });
+      for (const client of clientList) {
+        client.postMessage({ type: 'SW_UPDATED', version: CACHE_NAME });
+      }
+    })()
   );
-  self.clients.claim();
 });
 
-// Estrategia Network First con fallback a Cache
+// Estrategia Network First con bypass de caché HTTP para código (.html, .js, .json)
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (event.request.url.includes('convex.cloud')) return;
 
+  const url = new URL(event.request.url);
+  const isCodeOrHtml =
+    event.request.mode === 'navigate' ||
+    url.pathname.endsWith('/') ||
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.json');
+
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // Guardar copia fresca en caché si es recurso válido
+    (async () => {
+      try {
+        const fetchOptions = isCodeOrHtml ? { cache: 'no-cache' } : {};
+        const networkResponse = await fetch(event.request, fetchOptions);
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, responseToCache);
         }
         return networkResponse;
-      })
-      .catch(() => {
-        // Si no hay red (modo offline en el gym), responder desde caché
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          // Fallback a index.html para navegación SPA
-          if (event.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-        });
-      })
+      } catch {
+        // Fallback offline (ignorando query strings como ?v=1.14 para encontrar el módulo en caché)
+        const cachedResponse =
+          (await caches.match(event.request)) ||
+          (await caches.match(event.request, { ignoreSearch: true }));
+        if (cachedResponse) return cachedResponse;
+
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html', { ignoreSearch: true });
+        }
+      }
+    })()
   );
 });
+

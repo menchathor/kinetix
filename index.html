@@ -14,6 +14,29 @@
   <link rel="icon" type="image/png" href="./assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
 
+  <!-- Evitar caché HTTP obsoleto en móviles -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+
+  <!-- Import Map con control de versión para forzar recarga de todos los submódulos ES en móviles -->
+  <script type="importmap">
+  {
+    "imports": {
+      "./js/config.js": "./js/config.js?v=1.14",
+      "./js/state.js": "./js/state.js?v=1.14",
+      "./js/data/initialData.js": "./js/data/initialData.js?v=1.14",
+      "./js/services/convex.js": "./js/services/convex.js?v=1.14",
+      "./js/services/db.js": "./js/services/db.js?v=1.14",
+      "./js/services/timer.js": "./js/services/timer.js?v=1.14",
+      "./js/modules/workout.js": "./js/modules/workout.js?v=1.14",
+      "./js/modules/nutrition.js": "./js/modules/nutrition.js?v=1.14",
+      "./js/modules/analytics.js": "./js/modules/analytics.js?v=1.14",
+      "./js/modules/settings.js": "./js/modules/settings.js?v=1.14"
+    }
+  }
+  </script>
+
   <!-- Tailwind CSS & Chart.js -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -70,7 +93,9 @@
         <img src="./assets/icons/icon-192.png" alt="Kinetix Logo" class="w-8 h-8 rounded-xl border border-[var(--border)] shadow-xs object-cover" />
         <div>
           <h1 class="text-sm font-extrabold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
-            <span id="appTitleHeader">Kinetix</span> <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
+            <span id="appTitleHeader">Kinetix</span>
+            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
+            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.14</span>
           </h1>
           <p class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
         </div>
@@ -153,6 +178,6 @@
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.13"></script>
+  <script type="module" src="./js/app.js?v=1.14"></script>
 </body>
 </html>

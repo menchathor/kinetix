@@ -206,9 +206,30 @@ class App {
 
   registerServiceWorker() {
     if ('serviceWorker' in navigator) {
+      let refreshing = false;
+
+      // Si el Service Worker notifica que activó una versión nueva, recargar limpiamente
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
+
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('[PWA] Service Worker registrado'))
+        // updateViaCache: 'none' obliga al navegador móvil a verificar sw.js en el servidor siempre
+        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+          .then(reg => {
+            console.log('[PWA] Service Worker registrado');
+            reg.update();
+
+            // También verificar actualizaciones cada vez que el usuario abre la app desde segundo plano
+            document.addEventListener('visibilitychange', () => {
+              if (document.visibilityState === 'visible') {
+                reg.update();
+              }
+            });
+          })
           .catch(err => console.log('[PWA] Service Worker omitido:', err));
       });
     }

@@ -724,7 +724,7 @@ export class StorageService {
   // --- EXPORTAR E IMPORTAR DATOS (BACKUP) ---
   exportAllData() {
     const exportData = {
-      version: '1.13',
+      version: '1.14',
       exportDate: new Date().toISOString(),
       profile: INITIAL_DATA.profile,
       settings: this.getSettings(),

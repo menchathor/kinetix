@@ -607,20 +607,48 @@ function attachSettingsEvents(container, settings) {
   const btnClearCache = container.querySelector('#btnClearCacheReload');
   if (btnClearCache) {
     btnClearCache.addEventListener('click', async () => {
+      btnClearCache.disabled = true;
+      btnClearCache.innerHTML = '<span>⏳ Actualizando...</span>';
       try {
+        // 1. Forzar recarga en la caché HTTP del navegador para todos los módulos JS y HTML
+        const filesToRefresh = [
+          './',
+          './index.html',
+          './sw.js',
+          './js/config.js',
+          './js/app.js',
+          './js/state.js',
+          './js/data/initialData.js',
+          './js/services/convex.js',
+          './js/services/db.js',
+          './js/services/timer.js',
+          './js/modules/workout.js',
+          './js/modules/nutrition.js',
+          './js/modules/analytics.js',
+          './js/modules/settings.js'
+        ];
+        await Promise.all(
+          filesToRefresh.map(url => fetch(url, { cache: 'reload' }).catch(() => {}))
+        );
+
+        // 2. Eliminar todas las cachés del Service Worker
         if ('caches' in window) {
           const keys = await caches.keys();
           await Promise.all(keys.map(k => caches.delete(k)));
         }
+
+        // 3. Desregistrar Service Workers antiguos
         if ('serviceWorker' in navigator) {
           const regs = await navigator.serviceWorker.getRegistrations();
           await Promise.all(regs.map(r => r.unregister()));
         }
-        alert('¡Caché limpiada con éxito! La aplicación se recargará con los archivos más recientes.');
-        window.location.reload(true);
+
+        // 4. Redirigir con parámetro anti-caché
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.location.replace(`${cleanUrl}?v=${Date.now()}`);
       } catch (err) {
         console.error('Error limpiando caché:', err);
-        window.location.reload(true);
+        window.location.reload();
       }
     });
   }
