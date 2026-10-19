@@ -748,9 +748,10 @@ function initWeightChart(measurements, profile) {
           borderWidth: 1,
           borderRadius: 6,
           borderSkipped: false,
-          maxBarThickness: 36,
+          // Barras más anchas dentro del grupo = menos espacio entre InBody
+          // y báscula; el grupo no ocupa todo el mes para mantenerlo legible.
           barPercentage: 0.9,
-          categoryPercentage: 0.72
+          categoryPercentage: 0.45
         },
         {
           label: 'Báscula hogar',
@@ -761,9 +762,8 @@ function initWeightChart(measurements, profile) {
           borderWidth: 1,
           borderRadius: 6,
           borderSkipped: false,
-          maxBarThickness: 36,
           barPercentage: 0.9,
-          categoryPercentage: 0.72
+          categoryPercentage: 0.45
         },
         {
           type: 'line',
