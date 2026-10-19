@@ -173,7 +173,9 @@ export function mergeMeasurements(localMeasurements = [], cloudMeasurements = []
 
 export function normalizeCustomWeight(value) {
   if (typeof value === 'number' && Number.isFinite(value)) {
-    return { weight: value, updatedAt: 0 };
+    // Valor heredado (v1.14): usamos un timestamp mínimo no nulo para que
+    // se suba una vez a la nube y luego quede estable.
+    return { weight: value, updatedAt: 1 };
   }
   if (value && typeof value === 'object') {
     const weight = Number(value.weight ?? value.value);

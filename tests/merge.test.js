@@ -106,7 +106,7 @@ test('mergeCustomWeights usa el updatedAt de cada máquina', () => {
 
 test('mergeCustomWeights migra valores numéricos antiguos', () => {
   const merged = mergeCustomWeights({ chest_press: 40 }, {});
-  assert.deepEqual(merged.chest_press, { weight: 40, updatedAt: 0 });
+  assert.deepEqual(merged.chest_press, { weight: 40, updatedAt: 1 });
 });
 
 test('mergeNutrition gana el updatedAt más reciente', () => {
