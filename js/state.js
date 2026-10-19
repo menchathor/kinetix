@@ -34,6 +34,7 @@ class AppState {
             exerciseId: cardioDef.id,
             exerciseName: cardioDef.name,
             isCardio: true,
+            minutes: 20,
             sets: [{ setNumber: 1, weight: 20, reps: 20, completed: !!this.activeWorkout.cardioDone }],
             notes: ''
           });
@@ -68,6 +69,7 @@ class AppState {
       dayName: routine.dayName,
       startTime: new Date().toISOString(),
       date: new Date().toLocaleDateString('en-CA'),
+      updatedAt: Date.now(),
       cardioDone: false,
       cardioMinutes: 20,
       notes: '',
@@ -79,10 +81,11 @@ class AppState {
             exerciseId: ex.id,
             exerciseName: ex.name,
             isCardio: true,
+            minutes: 20,
             previousLog: prev,
             sets: [{
               setNumber: 1,
-              weight: 20, // 20 minutos
+              weight: 20, // espejo de minutes para compatibilidad
               reps: 20,
               completed: false,
               rpe: ''
@@ -126,6 +129,7 @@ class AppState {
   updateSet(exerciseIndex, setIndex, field, value, shouldNotify = true) {
     if (!this.activeWorkout) return;
     this.activeWorkout.exercises[exerciseIndex].sets[setIndex][field] = value;
+    this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
     if (shouldNotify) {
       this.notify();
@@ -136,6 +140,7 @@ class AppState {
     if (!this.activeWorkout) return false;
     const current = this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed;
     this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed = !current;
+    this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
     if (shouldNotify) {
       this.notify();
@@ -150,6 +155,7 @@ class AppState {
       ex.sets.forEach(s => {
         s.completed = true;
       });
+      this.activeWorkout.updatedAt = Date.now();
       db.saveActiveSession(this.activeWorkout);
       this.notify();
     }
@@ -160,6 +166,7 @@ class AppState {
     const current = !!this.activeWorkout.cardioDone;
     this.activeWorkout.cardioDone = !current;
     this.activeWorkout.cardioMinutes = this.activeWorkout.cardioDone ? minutes : 0;
+    this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
     this.notify();
     return this.activeWorkout.cardioDone;
@@ -168,6 +175,7 @@ class AppState {
   setCardioMinutes(minutes) {
     if (!this.activeWorkout) return;
     this.activeWorkout.cardioMinutes = Math.max(5, parseInt(minutes) || 20);
+    this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
   }
 
@@ -183,6 +191,7 @@ class AppState {
       completed: false,
       rpe: ''
     });
+    this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
     this.notify();
   }
@@ -190,6 +199,7 @@ class AppState {
   finishWorkout() {
     if (!this.activeWorkout) return null;
     this.activeWorkout.endTime = new Date().toISOString();
+    this.activeWorkout.updatedAt = Date.now();
     
     // Calcular duración
     const start = new Date(this.activeWorkout.startTime);
@@ -216,7 +226,13 @@ class AppState {
   }
 
   notify() {
-    this.listeners.forEach(cb => cb(this));
+    this.listeners.forEach(cb => {
+      try {
+        cb(this);
+      } catch (err) {
+        console.error('[State] Error en listener:', err);
+      }
+    });
   }
 }
 

@@ -1,4 +1,5 @@
 // Controlador Principal de la Aplicación (SPA & Enrutador)
+import { CONFIG, debugLog } from './config.js';
 import { state } from './state.js';
 import { timer } from './services/timer.js';
 import { renderWorkoutModule } from './modules/workout.js';
@@ -6,6 +7,8 @@ import { renderNutritionModule } from './modules/nutrition.js';
 import { renderAnalyticsModule } from './modules/analytics.js';
 import { renderSettingsModule } from './modules/settings.js';
 import { db } from './services/db.js';
+import { convex } from './services/convex.js';
+import { showToast } from './ui/toast.js';
 
 class App {
   constructor() {
@@ -15,16 +18,25 @@ class App {
   }
 
   init() {
-    // Configurar Tema (Claro / Oscuro)
     this.initTheme();
+
+    const validTabs = ['workout', 'nutrition', 'analytics', 'settings'];
+    const hashTab = location.hash.replace('#', '');
+    if (validTabs.includes(hashTab)) {
+      state.activeTab = hashTab;
+    }
 
     // Suscribirse a cambios de estado global (preserva la posición de scroll)
     state.subscribe(() => {
       this.renderCurrentView(true);
       this.updateNavigationUI();
+      this.updateHeader();
+      if (location.hash !== `#${state.activeTab}`) {
+        history.replaceState(null, '', `#${state.activeTab}`);
+      }
     });
 
-    // Configurar navegación inferior (al cambiar de pestaña sí resetea el scroll al inicio)
+    // Navegación inferior
     document.querySelectorAll('.nav-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const tab = btn.getAttribute('data-tab');
@@ -35,24 +47,36 @@ class App {
       });
     });
 
-    // Configurar Temporizador Flotante
+    // Soporte de enlaces directos (manifest shortcuts, atrás/adelante).
+    window.addEventListener('hashchange', () => {
+      const tab = location.hash.replace('#', '');
+      if (validTabs.includes(tab) && tab !== state.activeTab) {
+        state.setTab(tab);
+      }
+    });
+
     this.setupTimerUI();
 
-    // Render inicial
     this.renderCurrentView(false);
     this.updateNavigationUI();
+    this.updateHeader();
 
-    // Sincronización automática bidireccional en segundo plano (Local-First)
     this.initAutoSync();
 
-    // Registrar Service Worker para soporte offline PWA
+    // Si IndexedDB restauró datos tras un desalojo de localStorage, refrescar.
+    window.addEventListener('kinetix:restored', () => {
+      showToast('Datos recuperados desde el respaldo local (IndexedDB).', 'success');
+      state.notify();
+    });
+
     this.registerServiceWorker();
   }
 
   initTheme() {
-    const savedTheme = localStorage.getItem('smartfit_theme') || 'dark';
-    const isDark = savedTheme === 'dark';
+    const savedTheme = db.getTheme();
+    const isDark = savedTheme !== 'light';
     document.documentElement.classList.toggle('dark', isDark);
+    this.updateThemeMeta(isDark);
     this.updateThemeIcon(isDark);
 
     const btnToggle = document.getElementById('btnThemeToggle');
@@ -61,19 +85,39 @@ class App {
         const currentlyDark = document.documentElement.classList.contains('dark');
         const nextDark = !currentlyDark;
         document.documentElement.classList.toggle('dark', nextDark);
-        localStorage.setItem('smartfit_theme', nextDark ? 'dark' : 'light');
+        db.setTheme(nextDark ? 'dark' : 'light');
+        this.updateThemeMeta(nextDark);
         this.updateThemeIcon(nextDark);
-        // Refrescar vista actual para adaptar gráficas de Chart.js preservando scroll
         this.renderCurrentView(true);
       });
     }
   }
 
+  updateThemeMeta(isDark) {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', isDark ? '#090d16' : '#f8fafc');
+  }
+
   updateThemeIcon(isDark) {
     const iconEl = document.getElementById('themeIcon');
-    if (iconEl) {
-      iconEl.textContent = isDark ? '☀️' : '🌙';
+    if (iconEl) iconEl.textContent = isDark ? '☀️' : '🌙';
+  }
+
+  updateHeader() {
+    const profile = db.getProfile();
+    const subtitle = document.getElementById('headerSubtitle');
+    if (subtitle) {
+      subtitle.textContent = `Recomposición Corporal • ${profile.targetWeightMin}-${profile.targetWeightMax} kg`;
     }
+
+    const gymTime = document.getElementById('headerGymTime');
+    if (gymTime) {
+      const start = String(profile.gymSchedule || '').split('-')[0].trim();
+      gymTime.textContent = start || '18:00';
+    }
+
+    const versionBadge = document.getElementById('headerVersionBadge');
+    if (versionBadge) versionBadge.textContent = `v${CONFIG.APP_VERSION}`;
   }
 
   renderCurrentView(preserveScroll = false) {
@@ -110,17 +154,17 @@ class App {
     document.querySelectorAll('.nav-tab-btn').forEach(btn => {
       const tab = btn.getAttribute('data-tab');
       const isActive = tab === state.activeTab;
-      
-      const icon = btn.querySelector('.nav-icon');
       const label = btn.querySelector('.nav-label');
 
       if (isActive) {
         btn.classList.add('text-amber-500');
         btn.classList.remove('text-[var(--muted-foreground)]');
+        btn.setAttribute('aria-current', 'page');
         if (label) label.classList.add('font-bold');
       } else {
         btn.classList.remove('text-amber-500');
         btn.classList.add('text-[var(--muted-foreground)]');
+        btn.removeAttribute('aria-current');
         if (label) label.classList.remove('font-bold');
       }
     });
@@ -153,7 +197,6 @@ class App {
       }, 4000);
     });
 
-    // Eventos de botones del temporizador flotante
     const btnClose = document.getElementById('btnTimerClose');
     const btnAdd15 = document.getElementById('btnTimerAdd15');
     const btnToggle = document.getElementById('btnTimerTogglePlay');
@@ -163,76 +206,80 @@ class App {
       this.timerOverlay.classList.add('hidden');
     });
 
-    if (btnAdd15) btnAdd15.addEventListener('click', () => {
-      timer.addSeconds(15);
-    });
+    if (btnAdd15) btnAdd15.addEventListener('click', () => timer.addSeconds(15));
 
     if (btnToggle) btnToggle.addEventListener('click', () => {
-      if (timer.isRunning) {
-        timer.stop();
-      } else {
-        timer.start();
-      }
+      if (timer.isRunning) timer.stop();
+      else timer.start();
     });
+
+    // Retomar un descanso que estaba corriendo al recargar la app.
+    timer.restore();
   }
 
   async initAutoSync() {
-    // Sincronización transparente en segundo plano al iniciar
-    if (navigator.onLine) {
+    const runSync = async (source) => {
+      if (!navigator.onLine || !convex.hasSyncKey()) return;
       try {
-        const res = await db.syncTwoWay({ silent: true });
+        const res = await db.syncTwoWay();
         if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0)) {
-          console.log(`[AutoSync] Datos sincronizados desde la nube (+${res.importedWorkouts} entrenos, +${res.importedWeights || 0} pesos).`);
+          debugLog(`[AutoSync:${source}] +${res.importedWorkouts} entrenos, +${res.importedMeas} mediciones.`);
           state.notify();
         }
+        if (res && !res.success && res.code === 'SYNC_KEY_INVALID') {
+          showToast(res.error, 'error', 6000);
+        }
       } catch (err) {
-        console.log('[AutoSync] Segundo plano diferido:', err);
+        debugLog('[AutoSync] Diferido:', err);
       }
-    }
+    };
 
-    // Al reconectar a internet, sincronizar automáticamente
-    window.addEventListener('online', async () => {
-      try {
-        const res = await db.syncTwoWay({ silent: true });
-        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0)) {
-          console.log(`[AutoSync-Online] Sincronizados tras reconexión (+${res.importedWorkouts} entrenamientos).`);
-          state.notify();
-        }
-      } catch (err) {
-        console.warn('[AutoSync-Online] Error en reconexión:', err);
-      }
+    // Sincronización transparente al iniciar.
+    runSync('start');
+
+    // Al reconectar a internet.
+    window.addEventListener('online', () => runSync('online'));
+
+    // Al volver a la app después de un rato (máximo una vez cada 5 minutos).
+    let lastVisibilitySync = Date.now();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastVisibilitySync < 5 * 60 * 1000) return;
+      lastVisibilitySync = Date.now();
+      runSync('visible');
     });
   }
 
   registerServiceWorker() {
-    if ('serviceWorker' in navigator) {
-      let refreshing = false;
+    if (!('serviceWorker' in navigator)) return;
 
-      // Si el Service Worker notifica que activó una versión nueva, recargar limpiamente
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'SW_UPDATED' && !refreshing) {
-          refreshing = true;
-          window.location.reload();
-        }
-      });
+    let refreshing = false;
 
-      window.addEventListener('load', () => {
-        // updateViaCache: 'none' obliga al navegador móvil a verificar sw.js en el servidor siempre
-        navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
-          .then(reg => {
-            console.log('[PWA] Service Worker registrado');
-            reg.update();
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (!event.data || event.data.type !== 'SW_UPDATED' || refreshing) return;
 
-            // También verificar actualizaciones cada vez que el usuario abre la app desde segundo plano
-            document.addEventListener('visibilitychange', () => {
-              if (document.visibilityState === 'visible') {
-                reg.update();
-              }
-            });
-          })
-          .catch(err => console.log('[PWA] Service Worker omitido:', err));
-      });
-    }
+      // No recargar en medio de un entrenamiento: se perdería el foco/teclado.
+      if (state.activeWorkout) {
+        showToast('Hay una actualización lista. Se aplicará al terminar el entrenamiento.', 'info', 6000);
+        return;
+      }
+
+      refreshing = true;
+      window.location.reload();
+    });
+
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
+        .then(reg => {
+          debugLog('[PWA] Service Worker registrado');
+          reg.update().catch(() => {});
+
+          document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') reg.update().catch(() => {});
+          });
+        })
+        .catch(err => debugLog('[PWA] Service Worker omitido:', err));
+    });
   }
 }
 

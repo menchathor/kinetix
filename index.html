@@ -2,44 +2,35 @@
 <html lang="es" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Kinetix • Michael Meneses</title>
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Kinetix: entrenamiento de fuerza, nutrición y evolución corporal, local-first y offline.">
+  <title>Kinetix • Entrenamiento & Recomposición</title>
+
+  <!-- Aplicar el tema antes del primer paint para evitar flash claro/oscuro -->
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('kinetix_theme') || localStorage.getItem('smartfit_theme') || 'dark';
+        document.documentElement.classList.toggle('dark', theme !== 'light');
+      } catch (e) {}
+    })();
+  </script>
+
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#090d16">
+  <meta name="color-scheme" content="dark light">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Kinetix">
   <link rel="icon" type="image/png" href="./assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
 
-  <!-- Evitar caché HTTP obsoleto en móviles -->
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-  <meta http-equiv="Pragma" content="no-cache">
-  <meta http-equiv="Expires" content="0">
+  <!-- CSS compilado localmente (sin CDN en producción) -->
+  <link rel="stylesheet" href="./assets/css/tailwind.css">
 
-  <!-- Import Map con control de versión para forzar recarga de todos los submódulos ES en móviles -->
-  <script type="importmap">
-  {
-    "imports": {
-      "./js/config.js": "./js/config.js?v=1.14",
-      "./js/state.js": "./js/state.js?v=1.14",
-      "./js/data/initialData.js": "./js/data/initialData.js?v=1.14",
-      "./js/services/convex.js": "./js/services/convex.js?v=1.14",
-      "./js/services/db.js": "./js/services/db.js?v=1.14",
-      "./js/services/timer.js": "./js/services/timer.js?v=1.14",
-      "./js/modules/workout.js": "./js/modules/workout.js?v=1.14",
-      "./js/modules/nutrition.js": "./js/modules/nutrition.js?v=1.14",
-      "./js/modules/analytics.js": "./js/modules/analytics.js?v=1.14",
-      "./js/modules/settings.js": "./js/modules/settings.js?v=1.14"
-    }
-  }
-  </script>
-
-  <!-- Tailwind CSS & Chart.js -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Chart.js fijado a una versión local para funcionar offline -->
+  <script defer src="./assets/vendor/chart.umd.min.js"></script>
 
   <style>
     :root {
@@ -75,12 +66,36 @@
       color: var(--foreground);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-tap-highlight-color: transparent;
-      user-select: none;
+    }
+
+    /* Permitir seleccionar y copiar texto (notas, comidas, etc.) */
+    input, select, textarea, button {
+      font-family: inherit;
+    }
+    input, select, textarea {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+
+    /* iOS hace zoom al enfocar inputs con fuente < 16px; evitarlo sin
+       bloquear el zoom del usuario (accesibilidad). */
+    @media (max-width: 640px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
     }
 
     /* Safe area padding for iPhones with notch / home bar */
     .safe-bottom {
       padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
@@ -94,17 +109,17 @@
         <div>
           <h1 class="text-sm font-extrabold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
             <span id="appTitleHeader">Kinetix</span>
-            <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
-            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.14</span>
+            <span id="headerGymTime" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
+            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.15</span>
           </h1>
-          <p class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
+          <p id="headerSubtitle" class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
         </div>
       </div>
 
       <!-- Action Buttons: Theme Toggle & Avatar -->
       <div class="flex items-center gap-2">
-        <button id="btnThemeToggle" class="w-8 h-8 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center text-sm shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro">
-          <span id="themeIcon">☀️</span>
+        <button id="btnThemeToggle" class="w-8 h-8 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center text-sm shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro" aria-label="Cambiar entre modo claro y oscuro">
+          <span id="themeIcon" aria-hidden="true">☀️</span>
         </button>
         <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs">
           MM
@@ -129,15 +144,15 @@
         <span class="text-[11px] uppercase font-bold text-amber-500">Descanso</span>
       </div>
       <div class="flex items-center gap-1">
-        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos">+15s</button>
-        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]">⏸</button>
-        <button id="btnTimerClose" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] pl-1">✕</button>
+        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos" aria-label="Sumar 15 segundos al descanso">+15s</button>
+        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" aria-label="Pausar o reanudar el descanso">⏸</button>
+        <button id="btnTimerClose" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] pl-1" aria-label="Cerrar el temporizador">✕</button>
       </div>
     </div>
 
     <!-- Contador Digital -->
     <div class="text-center my-1">
-      <span id="timerTextDisplay" class="font-mono text-2xl font-black tracking-wider text-[var(--foreground)]">01:30</span>
+      <span id="timerTextDisplay" role="timer" aria-live="polite" class="font-mono text-2xl font-black tracking-wider text-[var(--foreground)]">01:30</span>
     </div>
 
     <!-- Barra de progreso -->
@@ -147,7 +162,7 @@
   </div>
 
   <!-- BOTTOM NAVIGATION BAR (Sticky) -->
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-lg border-t border-[var(--border)] safe-bottom transition-colors duration-200">
+  <nav aria-label="Navegación principal" class="fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-lg border-t border-[var(--border)] safe-bottom transition-colors duration-200">
     <div class="max-w-md mx-auto grid grid-cols-4 px-2 py-1">
       
       <!-- Pestaña 1: Rutina / Entrenamiento -->
@@ -178,6 +193,6 @@
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.14"></script>
+  <script type="module" src="./js/app.js?v=1.15"></script>
 </body>
 </html>

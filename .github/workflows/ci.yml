@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build CSS
+        run: npm run build:css
+
+      - name: Verify generated CSS is committed
+        run: |
+          if [ -n "$(git status --porcelain assets/css/tailwind.css)" ]; then
+            echo "assets/css/tailwind.css está desactualizado. Ejecuta 'npm run build:css' y commitéalo."
+            git --no-pager diff -- assets/css/tailwind.css | head -n 40
+            exit 1
+          fi

@@ -1,0 +1,47 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  /* Compatibilidad con la clase usada en toda la app. */
+  .shadow-xs {
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+
+  /* Tailwind v3 no genera modificadores de opacidad sobre colores con
+     variables CSS. Definimos las combinaciones que usa la app, con fallback
+     sólido para navegadores sin color-mix. */
+  .bg-\[var\(--accent\)\]\/30 { background-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+  .bg-\[var\(--accent\)\]\/40 { background-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .bg-\[var\(--accent\)\]\/50 { background-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .bg-\[var\(--accent\)\]\/60 { background-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+  .bg-\[var\(--accent\)\]\/70 { background-color: var(--accent); background-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+  .bg-\[var\(--card\)\]\/50 { background-color: var(--card); background-color: color-mix(in srgb, var(--card) 50%, transparent); }
+  .bg-\[var\(--card\)\]\/75 { background-color: var(--card); background-color: color-mix(in srgb, var(--card) 75%, transparent); }
+  .bg-\[var\(--card\)\]\/95 { background-color: var(--card); background-color: color-mix(in srgb, var(--card) 95%, transparent); }
+  .border-\[var\(--border\)\]\/40 { border-color: var(--border); border-color: color-mix(in srgb, var(--border) 40%, transparent); }
+  .border-\[var\(--border\)\]\/50 { border-color: var(--border); border-color: color-mix(in srgb, var(--border) 50%, transparent); }
+  .border-\[var\(--border\)\]\/60 { border-color: var(--border); border-color: color-mix(in srgb, var(--border) 60%, transparent); }
+  .text-\[var\(--foreground\)\]\/90 { color: var(--foreground); color: color-mix(in srgb, var(--foreground) 90%, transparent); }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Evita que el foco del teclado quede invisible. */
+  :focus-visible {
+    outline: 2px solid #f59e0b;
+    outline-offset: 2px;
+  }
+}

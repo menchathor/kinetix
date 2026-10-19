@@ -8,8 +8,10 @@
  * @module
  */
 
+import type * as lib_auth from "../lib/auth.js";
 import type * as measurements from "../measurements.js";
 import type * as nutrition from "../nutrition.js";
+import type * as profile from "../profile.js";
 import type * as sync from "../sync.js";
 import type * as workouts from "../workouts.js";
 
@@ -20,8 +22,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "lib/auth": typeof lib_auth;
   measurements: typeof measurements;
   nutrition: typeof nutrition;
+  profile: typeof profile;
   sync: typeof sync;
   workouts: typeof workouts;
 }>;

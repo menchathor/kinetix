@@ -1,13 +1,18 @@
 {
-  "name": "Kinetix • Recomposición & Salud",
+  "id": "./",
+  "name": "Kinetix • Entrenamiento & Recomposición",
   "short_name": "Kinetix",
-  "description": "Entrenamiento de fuerza en máquinas, plan nutricional clínico y evolución corporal",
-  "start_url": "./index.html",
+  "description": "Entrenamiento de fuerza en máquinas, plan nutricional, descanso activo y evolución corporal. Local-first y offline.",
+  "lang": "es-CL",
+  "dir": "ltr",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#090d16",
   "theme_color": "#090d16",
   "orientation": "portrait",
+  "categories": ["health", "fitness", "lifestyle"],
   "icons": [
     {
       "src": "./assets/icons/icon-192.png",
@@ -26,6 +31,20 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Entrenamiento de hoy",
+      "short_name": "Rutina",
+      "url": "./index.html#workout",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nueva medición",
+      "short_name": "Medición",
+      "url": "./index.html#analytics",
+      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

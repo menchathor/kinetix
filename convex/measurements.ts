@@ -1,9 +1,11 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { assertSyncKey } from "./lib/auth";
 
 // Guardar o actualizar una medición corporal / bioimpedancia
 export const save = mutation({
   args: {
+    syncKey: v.string(),
     date: v.string(), // "YYYY-MM-DD"
     weightKg: v.number(),
     bodyFatPercent: v.optional(v.number()),
@@ -20,36 +22,44 @@ export const save = mutation({
     waistCircumferenceCm: v.optional(v.number()),
     notes: v.optional(v.string()),
     source: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    assertSyncKey(args.syncKey);
+    const { syncKey: _syncKey, ...payload } = args;
+
     const existing = await ctx.db
       .query("measurements")
-      .withIndex("by_date", (q) => q.eq("date", args.date))
+      .withIndex("by_date", (q) => q.eq("date", payload.date))
       .first();
 
     const now = Date.now();
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        ...args,
+        ...payload,
+        updatedAt: payload.updatedAt || now,
       });
       return existing._id;
     } else {
       return await ctx.db.insert("measurements", {
-        ...args,
+        ...payload,
         createdAt: now,
+        updatedAt: payload.updatedAt || now,
       });
     }
   },
 });
 
-// Listar todas las mediciones ordenadas cronológicamente para las gráficas
+// Listar mediciones ordenadas cronológicamente para las gráficas
 export const list = query({
   args: {
+    syncKey: v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit ?? 100;
+    assertSyncKey(args.syncKey);
+    const limit = Math.min(Math.max(args.limit ?? 500, 1), 500);
     return await ctx.db.query("measurements").order("desc").take(limit);
   },
 });
@@ -57,9 +67,11 @@ export const list = query({
 // Eliminar una medición por fecha
 export const deleteMeasurement = mutation({
   args: {
+    syncKey: v.string(),
     date: v.string(),
   },
   handler: async (ctx, args) => {
+    assertSyncKey(args.syncKey);
     const existing = await ctx.db
       .query("measurements")
       .withIndex("by_date", (q) => q.eq("date", args.date))

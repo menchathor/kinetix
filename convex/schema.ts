@@ -18,6 +18,7 @@ export default defineSchema({
         exerciseId: v.string(),
         exerciseName: v.string(),
         isCardio: v.optional(v.boolean()),
+        minutes: v.optional(v.number()),
         sets: v.array(
           v.object({
             setNumber: v.number(),
@@ -32,6 +33,7 @@ export default defineSchema({
     ),
     notes: v.optional(v.string()),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   })
     .index("by_sessionId", ["sessionId"])
     .index("by_routineId", ["routineId"])
@@ -68,6 +70,7 @@ export default defineSchema({
     notes: v.optional(v.string()),
     source: v.optional(v.string()), // "Eufy", "InBody Smart Fit", "Manual"
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
   }).index("by_date", ["date"]),
 
   // Tabla de pesos personalizados por máquina (Sincronización multi-dispositivo)
@@ -77,7 +80,7 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_exerciseId", ["exerciseId"]),
 
-  // Perfil clínico y metas de recomposición
+  // Perfil clínico y metas de recomposición (editable desde Ajustes)
   user_profile: defineTable({
     name: v.string(),
     age: v.number(),
@@ -85,6 +88,18 @@ export default defineSchema({
     targetWeightMin: v.number(),
     targetWeightMax: v.number(),
     condition: v.string(),
+    startWeight: v.optional(v.number()),
+    currentWeight: v.optional(v.number()),
+    skeletalMuscleMass: v.optional(v.number()),
+    fatFreeMass: v.optional(v.number()),
+    trunkFat: v.optional(v.number()),
+    bodyFatPercent: v.optional(v.number()),
+    fatMassKg: v.optional(v.number()),
+    visceralFat: v.optional(v.number()),
+    basalMetabolicRate: v.optional(v.number()),
+    appendicularLeanIndex: v.optional(v.number()),
+    waterTargetLitres: v.optional(v.number()),
+    gymSchedule: v.optional(v.string()),
     updatedAt: v.number(),
   }),
 });

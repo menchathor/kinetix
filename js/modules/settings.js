@@ -1,24 +1,33 @@
-// Módulo de Configuración, Sincronización Convex Cloud y Respaldo de Datos
+// Módulo de Configuración, Perfil, Sincronización Convex y Respaldo de Datos
 import { db, formatDisplayDate } from '../services/db.js';
-import { INITIAL_DATA } from '../data/initialData.js';
 import { convex } from '../services/convex.js';
 import { CONFIG } from '../config.js';
 import { state } from '../state.js';
+import { escapeHtml, escapeAttr, safeUrl, toNumber } from '../utils/escape.js';
+import { showToast, confirmAction, showError } from '../ui/toast.js';
+
+let settingsCleanup = null;
 
 export function renderSettingsModule(container) {
-  const settings = db.getSettings();
-  const profile = INITIAL_DATA.profile;
+  if (settingsCleanup) {
+    settingsCleanup();
+    settingsCleanup = null;
+  }
+
+  const profile = db.getProfile();
+  const measurements = db.getMeasurements();
+  const stats = computeProfileStats(profile, measurements);
   const exercisesAnalytics = db.getAllExercisesAnalytics();
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
-      
+
       <!-- PERFIL DEL USUARIO -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between mb-1">
           <h2 class="text-base font-bold text-[var(--foreground)]">Perfil Clínico & Deportivo</h2>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">
-            Control InBody Oct 2026
+            Perfil editable
           </span>
         </div>
         <p class="text-xs text-[var(--muted-foreground)] mb-3">Parámetros fisiológicos activos para recomposición corporal</p>
@@ -26,49 +35,120 @@ export function renderSettingsModule(container) {
         <div class="space-y-2 text-xs">
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Nombre:</span>
-            <span class="font-bold text-[var(--foreground)]">${profile.name}</span>
+            <span class="font-bold text-[var(--foreground)]">${escapeHtml(profile.name)}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Estatura / Edad:</span>
-            <span class="font-bold text-[var(--foreground)]">${profile.height} cm • ${profile.age} años</span>
+            <span class="font-bold text-[var(--foreground)]">${escapeHtml(profile.height)} cm • ${escapeHtml(profile.age)} años</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Peso Actual (InBody):</span>
-            <span class="font-bold text-[var(--foreground)]">${profile.currentWeight} kg <span class="text-emerald-400 font-extrabold text-[11px]">(-3.1 kg)</span></span>
+            <span class="text-[var(--muted-foreground)]">Peso actual (última medición):</span>
+            <span class="font-bold text-[var(--foreground)]">
+              ${stats.currentWeight > 0 ? `${stats.currentWeight} kg` : 'Sin registro'}
+              ${stats.weightDiff !== null ? `<span class="${stats.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'} font-extrabold text-[11px]">(${stats.weightDiff > 0 ? '+' : ''}${stats.weightDiff} kg)</span>` : ''}
+            </span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Masa Libre de Grasa (Magra):</span>
-            <span class="font-bold text-blue-400">${profile.fatFreeMass} kg <span class="text-[10px] text-blue-300 font-normal">(100% blindada)</span></span>
+            <span class="text-[var(--muted-foreground)]">Masa libre de grasa (magra):</span>
+            <span class="font-bold text-blue-400">${stats.fatFreeMass > 0 ? `${stats.fatFreeMass} kg` : 'Sin registro'}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Masa Muscular Esquelética:</span>
-            <span class="font-bold text-blue-400">${profile.skeletalMuscleMass} kg (Activo metabólico)</span>
+            <span class="text-[var(--muted-foreground)]">Masa muscular esquelética:</span>
+            <span class="font-bold text-blue-400">${stats.skeletalMuscleMass > 0 ? `${stats.skeletalMuscleMass} kg` : 'Sin registro'}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Grasa Corporal / Troncal:</span>
-            <span class="font-bold text-emerald-400">${profile.bodyFatPercent}% (${profile.fatMassKg} kg) • Tronco: ${profile.trunkFat} kg</span>
+            <span class="text-[var(--muted-foreground)]">Grasa corporal / troncal:</span>
+            <span class="font-bold text-emerald-400">
+              ${stats.bodyFatPercent > 0 ? `${stats.bodyFatPercent}%` : 'Sin registro'}
+              ${stats.fatMassKg > 0 ? `(${stats.fatMassKg} kg)` : ''}
+              ${stats.trunkFat > 0 ? `• Tronco: ${stats.trunkFat} kg` : ''}
+            </span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Grasa Visceral:</span>
-            <span class="font-bold text-emerald-400">Nivel ${profile.visceralFat} (Rango saludable 0-10)</span>
+            <span class="text-[var(--muted-foreground)]">Grasa visceral:</span>
+            <span class="font-bold ${stats.visceralFat > 10 ? 'text-amber-400' : 'text-emerald-400'}">${stats.visceralFat > 0 ? `Nivel ${stats.visceralFat}` : 'Sin registro'} (saludable 0-10)</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Tasa Metabólica Basal (TMB):</span>
-            <span class="font-mono font-bold text-[var(--foreground)]">${profile.basalMetabolicRate} kcal / día</span>
+            <span class="text-[var(--muted-foreground)]">Tasa metabólica basal (TMB):</span>
+            <span class="font-mono font-bold text-[var(--foreground)]">${stats.bmr > 0 ? `${stats.bmr} kcal / día` : 'Sin registro'}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Peso Diana Sostenible:</span>
-            <span class="font-bold text-emerald-400">${profile.targetWeightMin} - ${profile.targetWeightMax} kg</span>
+            <span class="text-[var(--muted-foreground)]">Peso diana sostenible:</span>
+            <span class="font-bold text-emerald-400">${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
-            <span class="text-[var(--muted-foreground)]">Horario de Gimnasio:</span>
-            <span class="font-bold text-amber-500">${profile.gymSchedule} hrs</span>
+            <span class="text-[var(--muted-foreground)]">Horario de gimnasio:</span>
+            <span class="font-bold text-amber-500">${escapeHtml(profile.gymSchedule)} hrs</span>
           </div>
           <div class="flex justify-between py-1.5">
-            <span class="text-[var(--muted-foreground)]">Condición Clínica:</span>
-            <span class="font-medium text-[var(--foreground)] text-right">${profile.condition}</span>
+            <span class="text-[var(--muted-foreground)]">Condición clínica:</span>
+            <span class="font-medium text-[var(--foreground)] text-right">${escapeHtml(profile.condition)}</span>
           </div>
         </div>
+
+        <!-- Editor de perfil -->
+        <details class="mt-4 pt-3 border-t border-[var(--border)] group">
+          <summary class="cursor-pointer text-xs font-bold text-amber-500 hover:text-amber-400 select-none">
+            ✏️ Editar datos del perfil
+          </summary>
+          <div class="grid grid-cols-2 gap-2.5 mt-3 text-xs">
+            ${profileField('profileName', 'Nombre', profile.name, 'text')}
+            ${profileField('profileAge', 'Edad', profile.age, 'number', '1')}
+            ${profileField('profileHeight', 'Estatura (cm)', profile.height, 'number', '0.5')}
+            ${profileField('profileStartWeight', 'Peso inicial (kg)', profile.startWeight, 'number', '0.1')}
+            ${profileField('profileCurrentWeight', 'Peso actual (kg)', profile.currentWeight, 'number', '0.1')}
+            ${profileField('profileTargetMin', 'Meta mínima (kg)', profile.targetWeightMin, 'number', '0.1')}
+            ${profileField('profileTargetMax', 'Meta máxima (kg)', profile.targetWeightMax, 'number', '0.1')}
+            ${profileField('profileFatFreeMass', 'Masa magra (kg)', profile.fatFreeMass, 'number', '0.1')}
+            ${profileField('profileBodyFat', '% grasa corporal', profile.bodyFatPercent, 'number', '0.1')}
+            ${profileField('profileFatMass', 'Masa grasa (kg)', profile.fatMassKg, 'number', '0.1')}
+            ${profileField('profileTrunkFat', 'Grasa troncal (kg)', profile.trunkFat, 'number', '0.01')}
+            ${profileField('profileVisceral', 'Grasa visceral (nivel)', profile.visceralFat, 'number', '1')}
+            ${profileField('profileBmr', 'TMB (kcal/día)', profile.basalMetabolicRate, 'number', '1')}
+            ${profileField('profileWater', 'Meta agua (L)', profile.waterTargetLitres, 'number', '0.1')}
+            ${profileField('profileGym', 'Horario gimnasio', profile.gymSchedule, 'text')}
+            <div class="col-span-2">
+              <label class="font-bold text-[var(--foreground)] block mb-1" for="profileCondition">Condición clínica</label>
+              <input id="profileCondition" type="text" value="${escapeAttr(profile.condition)}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+            </div>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button id="btnSaveProfile" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
+              Guardar perfil
+            </button>
+            <button id="btnSaveProfileCloud" class="px-3 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+              Guardar y sincronizar
+            </button>
+          </div>
+        </details>
+      </div>
+
+      <!-- CLAVE DE SINCRONIZACIÓN -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border ${convex.hasSyncKey() ? 'border-emerald-500/30' : 'border-amber-500/40'} shadow-xs">
+        <div class="flex items-center justify-between mb-1">
+          <div class="flex items-center gap-2">
+            <span class="text-base">🔐</span>
+            <h3 class="text-sm font-bold text-[var(--foreground)]">Clave de Sincronización</h3>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${convex.hasSyncKey() ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">
+            ${convex.hasSyncKey() ? '🟢 Configurada' : '🟡 Sin configurar'}
+          </span>
+        </div>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+          La nube contiene datos de salud, por lo que todas las operaciones exigen esta clave.
+          Se guarda sólo en este dispositivo y nunca en el código público.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-2">
+          <input id="inputSyncKey" type="password" autocomplete="current-password" placeholder="Pega aquí tu clave de sincronización" class="flex-1 text-xs py-2 px-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500" />
+          <button id="btnSaveSyncKey" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs transition-all">Guardar clave</button>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <button id="btnTestSyncKey" class="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]">Probar conexión</button>
+          <button id="btnClearSyncKey" class="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--border)]">Olvidar clave</button>
+        </div>
+        <p class="text-[10px] text-[var(--muted-foreground)] mt-2">
+          Configúrala en el servidor con <code class="font-mono">npx convex env set KINETIX_SYNC_KEY &lt;clave&gt;</code>.
+        </p>
       </div>
 
       <!-- GESTIÓN DE PESOS BASE Y BITÁCORA DE LOGROS -->
@@ -86,7 +166,6 @@ export function renderSettingsModule(container) {
           Administra el peso base objetivo para tus próximos entrenamientos y revisa tus logros de sobrecarga progresiva.
         </p>
 
-        <!-- Filtros de Rutina -->
         <div class="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none text-[11px]" id="exerciseFilterTabs">
           <button data-filter="all" class="filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0">Todos (${exercisesAnalytics.length})</button>
           <button data-filter="torso1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🏋️ Torso 1</button>
@@ -95,18 +174,11 @@ export function renderSettingsModule(container) {
           <button data-filter="pierna2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🔥 Pierna 2</button>
         </div>
 
-        <!-- Buscador de ejercicio -->
         <div class="relative my-2.5">
-          <input 
-            type="text" 
-            id="inputSearchExercise" 
-            placeholder="Buscar por ejercicio o músculo..." 
-            class="w-full text-xs py-2 pl-8 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors"
-          />
-          <span class="absolute left-2.5 top-2.5 text-xs text-[var(--muted-foreground)]">🔍</span>
+          <input type="text" id="inputSearchExercise" placeholder="Buscar por ejercicio o músculo..." class="w-full text-xs py-2 pl-8 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors" />
+          <span class="absolute left-2.5 top-2.5 text-xs text-[var(--muted-foreground)]" aria-hidden="true">🔍</span>
         </div>
 
-        <!-- Lista de Tarjetas de Ejercicios -->
         <div class="space-y-3 mt-3" id="exerciseAnalyticsList">
           ${renderExercisesAnalyticsList(exercisesAnalytics)}
         </div>
@@ -126,11 +198,15 @@ export function renderSettingsModule(container) {
         </p>
 
         <div class="flex items-center justify-between p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)]">
-          <span class="text-xs font-semibold text-[var(--foreground)]">Tema de la interfaz:</span>
+          <label for="selectThemeSetting" class="text-xs font-semibold text-[var(--foreground)]">Tema de la interfaz:</label>
           <select id="selectThemeSetting" class="text-xs py-1.5 px-3 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] font-medium outline-none">
-            <option value="dark" ${localStorage.getItem('smartfit_theme') !== 'light' ? 'selected' : ''}>🌙 Modo Oscuro (Predeterminado)</option>
-            <option value="light" ${localStorage.getItem('smartfit_theme') === 'light' ? 'selected' : ''}>☀️ Modo Claro</option>
+            <option value="dark" ${db.getTheme() !== 'light' ? 'selected' : ''}>🌙 Modo Oscuro</option>
+            <option value="light" ${db.getTheme() === 'light' ? 'selected' : ''}>☀️ Modo Claro</option>
           </select>
+        </div>
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] mt-2">
+          <span class="text-xs font-semibold text-[var(--foreground)]">Unidad de carga:</span>
+          <span class="text-xs font-mono font-bold text-amber-500">${escapeHtml(CONFIG.WEIGHT_UNIT)} (placa de máquina)</span>
         </div>
       </div>
 
@@ -146,25 +222,25 @@ export function renderSettingsModule(container) {
           </span>
         </div>
         <p class="text-xs text-[var(--muted-foreground)] mb-3">
-          Sincronización automática de alta velocidad. Tus registros se guardan primero en tu teléfono (Local-First) y se respaldan en Convex Cloud de forma transparente.
+          Tus registros se guardan primero en este dispositivo y se respaldan en Convex. El merge usa <code class="font-mono">updatedAt</code> y respeta las eliminaciones hechas offline.
         </p>
 
         <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-2.5 text-xs">
           <div class="flex items-center justify-between text-[11px]">
-            <span class="text-[var(--muted-foreground)]">Estado de Red:</span>
-            <span class="font-semibold ${convex.isOnline ? 'text-emerald-400' : 'text-amber-400'}">${convex.isOnline ? 'Conectado a Internet' : 'Sin conexión (Guardando local)'}</span>
+            <span class="text-[var(--muted-foreground)]">Estado de red:</span>
+            <span class="font-semibold ${convex.isOnline ? 'text-emerald-400' : 'text-amber-400'}">${convex.isOnline ? 'Conectado a Internet' : 'Sin conexión (guardando local)'}</span>
           </div>
           <div class="flex items-center justify-between text-[11px]">
-            <span class="text-[var(--muted-foreground)]">Última Sincronización:</span>
+            <span class="text-[var(--muted-foreground)]">Última sincronización:</span>
             <span id="textLastSync" class="font-mono text-[var(--foreground)]">${convex.lastSyncTime ? new Date(convex.lastSyncTime).toLocaleTimeString() : 'Automática'}</span>
           </div>
-          
+
           <div class="pt-1 flex flex-col sm:flex-row gap-2">
             <button id="btnSyncNow" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs">
-              <span id="iconSync">☁️</span> <span id="textSyncBtn">Sincronizar Historial Ahora</span>
+              <span id="iconSync" aria-hidden="true">☁️</span> <span id="textSyncBtn">Sincronizar ahora</span>
             </button>
             <button id="btnPullFromCloud" class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
-              <span>📥 Restaurar desde la Nube</span>
+              <span aria-hidden="true">📥</span> Restaurar desde la nube
             </button>
           </div>
         </div>
@@ -177,40 +253,74 @@ export function renderSettingsModule(container) {
           <h3 class="text-sm font-bold text-[var(--foreground)]">Copia de Seguridad & Portabilidad</h3>
         </div>
         <p class="text-xs text-[var(--muted-foreground)] mb-3">
-          Descarga un archivo con todo tu historial de entrenamientos y mediciones para guardarlo en tu Google Drive o migrarlo.
+          Incluye entrenamientos, mediciones, nutrición, perfil y pesos personalizados. Guárdalo en Drive o úsalo para migrar.
         </p>
 
         <div class="flex flex-col sm:flex-row gap-2">
           <button id="btnExportJSON" class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
-            <span>📥 Descargar Copia de Seguridad (.json)</span>
+            <span aria-hidden="true">📥</span> Descargar copia (.json)
           </button>
-          
+
           <label class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-semibold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer text-center">
-            <span>📤 Restaurar desde .json</span>
-            <input type="file" id="fileImportJSON" accept=".json" class="hidden" />
+            <span aria-hidden="true">📤</span> Restaurar desde .json
+            <input type="file" id="fileImportJSON" accept=".json,application/json" class="hidden" />
           </label>
         </div>
       </div>
 
       <!-- INFO DE LA APLICACIÓN Y ACTUALIZACIONES -->
       <div class="p-4 rounded-2xl bg-[var(--accent)]/30 border border-[var(--border)] text-xs text-[var(--muted-foreground)] space-y-2">
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-between gap-2">
           <div>
-            <p class="font-bold text-[var(--foreground)]">Kinetix v${CONFIG.APP_VERSION || '1.5'} (PWA)</p>
-            <p class="text-[11px]">Backend Convex Cloud • Michael Meneses • 18:00 hrs</p>
+            <p class="font-bold text-[var(--foreground)]">Kinetix v${escapeHtml(CONFIG.APP_VERSION)} (PWA)</p>
+            <p class="text-[11px]">Local-First + Convex Cloud · Perfil editable · Offline</p>
           </div>
           <button id="btnClearCacheReload" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 font-bold border border-amber-500/30 text-[11px] flex items-center gap-1 transition-colors">
-            <span>🔄 Forzar Actualización</span>
+            <span aria-hidden="true">🔄</span> Forzar actualización
           </button>
         </div>
-        <p class="text-[11px] opacity-75">Toca "Forzar Actualización" si hiciste cambios recientes y tu celular sigue mostrando la versión en caché.</p>
+        <p class="text-[11px] opacity-75">Úsalo si cambiaste de versión y el móvil sigue mostrando código viejo en caché.</p>
       </div>
 
     </div>
   `;
 
+  settingsCleanup = attachSettingsEvents(container);
+}
 
-  attachSettingsEvents(container, settings);
+function profileField(id, label, value, type = 'text', step = null) {
+  const safeValue = value === undefined || value === null ? '' : value;
+  const stepAttr = step ? ` step="${escapeAttr(step)}"` : '';
+  return `
+    <div>
+      <label class="font-bold text-[var(--foreground)] block mb-1" for="${escapeAttr(id)}">${escapeHtml(label)}</label>
+      <input id="${escapeAttr(id)}" type="${escapeAttr(type)}"${stepAttr} value="${escapeAttr(safeValue)}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+    </div>
+  `;
+}
+
+function computeProfileStats(profile, measurements) {
+  const sorted = [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const latestInBody = sorted.find(m => String(m.source || '').toLowerCase().includes('inbody'));
+  const latest = latestInBody || sorted[0] || {};
+
+  const currentWeight = toNumber(latest.weight ?? latest.weightKg ?? profile.currentWeight);
+  const startWeight = toNumber(profile.startWeight) || currentWeight;
+  const weightDiff = startWeight > 0 && currentWeight > 0
+    ? Math.round((currentWeight - startWeight) * 10) / 10
+    : null;
+
+  return {
+    currentWeight,
+    weightDiff,
+    fatFreeMass: toNumber(latest.fatFreeMass ?? profile.fatFreeMass),
+    skeletalMuscleMass: toNumber(latest.muscleMassKg ?? latest.muscleMass ?? profile.skeletalMuscleMass),
+    bodyFatPercent: toNumber(latest.bodyFatPercent ?? latest.fatPercent ?? profile.bodyFatPercent),
+    fatMassKg: toNumber(latest.fatMassKg ?? latest.fatMass ?? profile.fatMassKg),
+    trunkFat: toNumber(latest.trunkFat ?? profile.trunkFat),
+    visceralFat: toNumber(latest.visceralFat ?? profile.visceralFat),
+    bmr: Math.round(toNumber(latest.bmr ?? profile.basalMetabolicRate))
+  };
 }
 
 // Renderiza cada tarjeta de ejercicio con su selector de peso y bitácora
@@ -218,6 +328,8 @@ function renderExercisesAnalyticsList(exercises) {
   if (!exercises || exercises.length === 0) {
     return `<div class="p-4 text-center text-xs text-[var(--muted-foreground)]">No hay ejercicios registrados.</div>`;
   }
+
+  const fallbackImage = './assets/images/smartfit_ill_chest_press.webp';
 
   return exercises.map(ex => {
     const stats = ex.stats;
@@ -228,34 +340,34 @@ function renderExercisesAnalyticsList(exercises) {
         : `<span class="inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] bg-[var(--accent)] px-2 py-0.5 rounded-full">Base inicial</span>`;
 
     const keywords = `${ex.name} ${ex.targetMuscles || ''} ${ex.machineName || ''} ${ex.routineName || ''}`.toLowerCase();
+    const image = safeUrl(ex.image, fallbackImage);
+    const safeId = escapeAttr(ex.id);
 
     return `
-      <div class="exercise-card-item bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 rounded-2xl p-3.5 border border-[var(--border)] transition-all" data-routine="${ex.routineId}" data-keywords="${keywords}">
+      <div class="exercise-card-item bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 rounded-2xl p-3.5 border border-[var(--border)] transition-all" data-routine="${escapeAttr(ex.routineId)}" data-keywords="${escapeAttr(keywords)}">
         <div class="flex items-start gap-3">
-          <!-- Miniatura precisa de la máquina -->
           <div class="relative shrink-0">
-            <img 
-              src="${ex.image || './assets/images/smartfit_chest_press_1789138165787.jpg'}" 
-              alt="${ex.name}" 
+            <img
+              src="${image}"
+              alt="${escapeAttr(ex.name)}"
               class="w-16 h-16 rounded-xl object-cover border border-[var(--border)] bg-[var(--card)]"
-              onerror="this.src='./assets/images/smartfit_chest_press_1789138165787.jpg'"
+              loading="lazy"
+              onerror="this.onerror=null;this.src='${fallbackImage}'"
             />
             <span class="absolute -top-1.5 -right-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[var(--card)] border border-[var(--border)] text-[var(--muted-foreground)]">
-              ${ex.dayName ? ex.dayName.substring(0, 3) : 'Día'}
+              ${escapeHtml(ex.dayName ? ex.dayName.substring(0, 3) : 'Día')}
             </span>
           </div>
 
-          <!-- Información del Ejercicio -->
           <div class="flex-1 min-w-0">
             <div class="flex items-start justify-between gap-1">
               <div>
-                <h4 class="text-xs font-bold text-[var(--foreground)] truncate">${ex.name}</h4>
-                <p class="text-[11px] text-[var(--muted-foreground)] truncate">${ex.targetMuscles || ex.machineName}</p>
+                <h4 class="text-xs font-bold text-[var(--foreground)] truncate">${escapeHtml(ex.name)}</h4>
+                <p class="text-[11px] text-[var(--muted-foreground)] truncate">${escapeHtml(ex.targetMuscles || ex.machineName)}</p>
               </div>
               <div>${progressBadge}</div>
             </div>
 
-            <!-- Métricas rápidas: Base vs PR -->
             <div class="flex items-center gap-3 mt-1.5 text-[10px] text-[var(--muted-foreground)]">
               <span>Base: <strong class="text-[var(--foreground)]">${stats.baselineWeight > 0 ? stats.baselineWeight + ' kg' : 'Auto'}</strong></span>
               <span>•</span>
@@ -266,55 +378,55 @@ function renderExercisesAnalyticsList(exercises) {
           </div>
         </div>
 
-        <!-- Ajuste Interactivo de Peso Objetivo -->
         <div class="mt-3 pt-2.5 border-t border-[var(--border)] flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-1.5">
-            <span class="text-[11px] font-medium text-[var(--foreground)]">Peso Siguiente Sesión:</span>
+            <span class="text-[11px] font-medium text-[var(--foreground)]">Peso siguiente sesión:</span>
             <div class="flex items-center gap-1">
-              <button 
-                type="button" 
-                data-id="${ex.id}" 
-                data-delta="-2.5" 
+              <button
+                type="button"
+                data-id="${safeId}"
+                data-delta="-2.5"
                 class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
                 title="Bajar 2.5 kg"
+                aria-label="Bajar 2.5 kg"
               >−</button>
-              
+
               <div class="relative flex items-center">
-                <input 
-                  type="number" 
-                  step="2.5" 
-                  min="0" 
-                  data-id="${ex.id}" 
-                  value="${stats.targetWeight}" 
+                <input
+                  type="number"
+                  step="2.5"
+                  min="0"
+                  data-id="${safeId}"
+                  value="${escapeAttr(stats.targetWeight)}"
                   class="input-custom-weight w-16 text-center font-bold text-amber-500 bg-[var(--card)] border border-[var(--border)] rounded-lg py-1 text-xs outline-none focus:border-amber-500 transition-colors"
+                  aria-label="Peso objetivo en kg para ${escapeAttr(ex.name)}"
                 />
                 <span class="absolute right-1 text-[10px] text-[var(--muted-foreground)] pointer-events-none">kg</span>
               </div>
 
-              <button 
-                type="button" 
-                data-id="${ex.id}" 
-                data-delta="2.5" 
+              <button
+                type="button"
+                data-id="${safeId}"
+                data-delta="2.5"
                 class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
                 title="Subir 2.5 kg"
+                aria-label="Subir 2.5 kg"
               >+</button>
             </div>
-            <span id="savedIndicator_${ex.id}" class="text-[10px] font-bold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
+            <span id="savedIndicator_${safeId}" class="text-[10px] font-bold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
           </div>
 
-          <!-- Botón Bitácora Desplegable -->
-          <button 
-            type="button" 
-            data-target="history_${ex.id}" 
+          <button
+            type="button"
+            data-target="history_${safeId}"
             class="btn-toggle-history text-[11px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-amber-500/10"
           >
             <span>📜 Bitácora (${stats.history.length})</span>
-            <span id="chevron_${ex.id}" class="text-[9px] transition-transform duration-200">▼</span>
+            <span class="text-[9px] transition-transform duration-200">▼</span>
           </button>
         </div>
 
-        <!-- Acordeón de Bitácora Histórica -->
-        <div id="history_${ex.id}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-2">
+        <div id="history_${safeId}" class="hidden mt-3 pt-3 border-t border-[var(--border)] space-y-2">
           ${renderExerciseHistoryAccordion(stats)}
         </div>
       </div>
@@ -335,7 +447,7 @@ function renderExerciseHistoryAccordion(stats) {
   return `
     <div class="space-y-1.5">
       <div class="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider px-1">
-        Historial de Sobrecarga Progresiva (Últimas sesiones)
+        Historial de sobrecarga progresiva (últimas sesiones)
       </div>
       ${stats.history.map(item => {
         const dateFormatted = item.date ? formatDisplayDate(item.date, {
@@ -349,11 +461,11 @@ function renderExerciseHistoryAccordion(stats) {
         return `
           <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px]">
             <div class="flex items-center gap-2">
-              <span class="font-bold text-[var(--foreground)] capitalize">${dateFormatted}</span>
-              <span class="text-[var(--muted-foreground)]">• ${item.routineName}</span>
+              <span class="font-bold text-[var(--foreground)] capitalize">${escapeHtml(dateFormatted)}</span>
+              <span class="text-[var(--muted-foreground)]">• ${escapeHtml(item.routineName)}</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-amber-500 font-mono font-medium">${setsSummary}</span>
+              <span class="text-amber-500 font-mono font-medium">${escapeHtml(setsSummary)}</span>
               <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 font-bold text-[10px] border border-amber-500/20">
                 Máx: ${item.bestWeight} kg
               </span>
@@ -365,7 +477,30 @@ function renderExerciseHistoryAccordion(stats) {
   `;
 }
 
-function attachSettingsEvents(container, settings) {
+function readProfileForm(container) {
+  const value = (id) => container.querySelector(`#${id}`)?.value ?? '';
+  return {
+    name: value('profileName').trim() || 'Atleta',
+    age: toNumber(value('profileAge'), 0),
+    height: toNumber(value('profileHeight'), 0),
+    heightCm: toNumber(value('profileHeight'), 0),
+    startWeight: toNumber(value('profileStartWeight'), 0),
+    currentWeight: toNumber(value('profileCurrentWeight'), 0),
+    targetWeightMin: toNumber(value('profileTargetMin'), 0),
+    targetWeightMax: toNumber(value('profileTargetMax'), 0),
+    fatFreeMass: toNumber(value('profileFatFreeMass'), 0),
+    bodyFatPercent: toNumber(value('profileBodyFat'), 0),
+    fatMassKg: toNumber(value('profileFatMass'), 0),
+    trunkFat: toNumber(value('profileTrunkFat'), 0),
+    visceralFat: toNumber(value('profileVisceral'), 0),
+    basalMetabolicRate: toNumber(value('profileBmr'), 0),
+    waterTargetLitres: toNumber(value('profileWater'), 0),
+    gymSchedule: value('profileGym').trim(),
+    condition: value('profileCondition').trim()
+  };
+}
+
+function attachSettingsEvents(container) {
   const selectTheme = container.querySelector('#selectThemeSetting');
   const btnSyncNow = container.querySelector('#btnSyncNow');
   const btnPullFromCloud = container.querySelector('#btnPullFromCloud');
@@ -397,9 +532,7 @@ function attachSettingsEvents(container, settings) {
     });
 
     const noResults = container.querySelector('#noExercisesFoundMsg');
-    if (noResults) {
-      noResults.classList.toggle('hidden', visibleCount > 0);
-    }
+    if (noResults) noResults.classList.toggle('hidden', visibleCount > 0);
   };
 
   filterTabs.forEach(btn => {
@@ -421,63 +554,129 @@ function attachSettingsEvents(container, settings) {
   }
 
   // --- CONTROLES DE PESO OBJETIVO (+ / - / Input) ---
-  const adjustButtons = container.querySelectorAll('.btn-adjust-custom-weight');
-  adjustButtons.forEach(btn => {
+  container.querySelectorAll('.btn-adjust-custom-weight').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.id;
       const delta = parseFloat(btn.dataset.delta) || 0;
-      const input = container.querySelector(`.input-custom-weight[data-id="${id}"]`);
+      const input = container.querySelector(`.input-custom-weight[data-id="${CSS.escape(id)}"]`);
       if (input) {
         const currentVal = parseFloat(input.value) || 0;
         const newVal = Math.max(0, Math.round((currentVal + delta) * 10) / 10);
         input.value = newVal;
         db.setCustomWeight(id, newVal);
-
-        // Feedback visual
-        const ind = container.querySelector(`#savedIndicator_${id}`);
-        if (ind) {
-          ind.classList.remove('opacity-0');
-          setTimeout(() => ind.classList.add('opacity-0'), 1500);
-        }
+        showSavedIndicator(container, id);
       }
     });
   });
 
-  const weightInputs = container.querySelectorAll('.input-custom-weight');
-  weightInputs.forEach(input => {
+  container.querySelectorAll('.input-custom-weight').forEach(input => {
     input.addEventListener('change', (e) => {
       const id = e.target.dataset.id;
       const newVal = Math.max(0, parseFloat(e.target.value) || 0);
       e.target.value = newVal;
       db.setCustomWeight(id, newVal);
-
-      const ind = container.querySelector(`#savedIndicator_${id}`);
-      if (ind) {
-        ind.classList.remove('opacity-0');
-        setTimeout(() => ind.classList.add('opacity-0'), 1500);
-      }
+      showSavedIndicator(container, id);
     });
   });
 
   // --- BITÁCORA DESPLEGABLE (ACORDEÓN) ---
-  const historyButtons = container.querySelectorAll('.btn-toggle-history');
-  historyButtons.forEach(btn => {
+  container.querySelectorAll('.btn-toggle-history').forEach(btn => {
     btn.addEventListener('click', () => {
       const targetId = btn.dataset.target;
-      const targetEl = container.querySelector(`#${targetId}`);
+      const targetEl = container.querySelector(`#${CSS.escape(targetId)}`);
       const chevron = btn.querySelector('span:last-child');
       if (targetEl) {
         const isHidden = targetEl.classList.contains('hidden');
         targetEl.classList.toggle('hidden', !isHidden);
-        if (chevron) {
-          chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
-        }
+        if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
       }
     });
   });
 
-  // Escuchar estado en vivo de Convex
-  convex.onSyncStatus(({ status, isOnline, lastSync }) => {
+  // --- PERFIL ---
+  const saveProfile = (sync) => {
+    const nextProfile = readProfileForm(container);
+    db.saveProfile(nextProfile);
+    state.notify();
+    showToast(sync ? 'Perfil guardado y enviado a la nube.' : 'Perfil guardado en este dispositivo.', 'success');
+  };
+  const btnSaveProfile = container.querySelector('#btnSaveProfile');
+  const btnSaveProfileCloud = container.querySelector('#btnSaveProfileCloud');
+  if (btnSaveProfile) btnSaveProfile.addEventListener('click', () => saveProfile(false));
+  if (btnSaveProfileCloud) {
+    btnSaveProfileCloud.addEventListener('click', async () => {
+      if (!convex.hasSyncKey()) {
+        showToast('Primero configura la clave de sincronización.', 'warning');
+        container.querySelector('#inputSyncKey')?.focus();
+        return;
+      }
+      saveProfile(true);
+      const res = await db.syncTwoWay();
+      if (res.success) showToast('Perfil sincronizado con la nube.', 'success');
+      else showToast(res.error || 'No se pudo sincronizar el perfil.', 'error');
+    });
+  }
+
+  // --- CLAVE DE SINCRONIZACIÓN ---
+  const inputSyncKey = container.querySelector('#inputSyncKey');
+  const btnSaveSyncKey = container.querySelector('#btnSaveSyncKey');
+  const btnTestSyncKey = container.querySelector('#btnTestSyncKey');
+  const btnClearSyncKey = container.querySelector('#btnClearSyncKey');
+
+  if (btnSaveSyncKey) {
+    btnSaveSyncKey.addEventListener('click', async () => {
+      const key = inputSyncKey?.value?.trim() || '';
+      if (!key) {
+        showToast('Escribe la clave de sincronización.', 'warning');
+        inputSyncKey?.focus();
+        return;
+      }
+      convex.setSyncKey(key);
+      if (inputSyncKey) inputSyncKey.value = '';
+      showToast('Clave guardada. Probando conexión…', 'info');
+      const res = await convex.fetchCloudProfile();
+      if (res.success) {
+        showToast('Clave válida. Sincronización habilitada.', 'success');
+        await db.syncTwoWay();
+      } else {
+        showToast(res.error || 'La clave no pudo validarse.', 'error', 6000);
+      }
+      state.notify();
+    });
+  }
+
+  if (btnTestSyncKey) {
+    btnTestSyncKey.addEventListener('click', async () => {
+      if (!convex.hasSyncKey()) {
+        showToast('No hay una clave configurada.', 'warning');
+        inputSyncKey?.focus();
+        return;
+      }
+      btnTestSyncKey.disabled = true;
+      const res = await convex.fetchCloudProfile();
+      btnTestSyncKey.disabled = false;
+      if (res.success) showToast('Conexión y clave correctas.', 'success');
+      else showToast(res.error || 'No se pudo conectar.', 'error', 6000);
+    });
+  }
+
+  if (btnClearSyncKey) {
+    btnClearSyncKey.addEventListener('click', async () => {
+      const ok = await confirmAction({
+        title: '¿Olvidar la clave de sincronización?',
+        message: 'Los datos locales se mantienen, pero la app dejará de respaldar en la nube hasta que vuelvas a configurarla.',
+        confirmText: 'Olvidar clave',
+        danger: true
+      });
+      if (!ok) return;
+      convex.clearSyncKey();
+      showToast('Clave eliminada de este dispositivo.', 'info');
+      state.notify();
+    });
+  }
+
+  // --- ESTADO EN VIVO DE CONVEX ---
+  const unsubscribe = convex.onSyncStatus(({ isOnline, lastSync }) => {
     if (cloudStatusBadge) {
       cloudStatusBadge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${
         isOnline ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
@@ -489,30 +688,41 @@ function attachSettingsEvents(container, settings) {
     }
   });
 
+  // --- TEMA ---
   if (selectTheme) {
     selectTheme.addEventListener('change', (e) => {
       const isDark = e.target.value === 'dark';
       document.documentElement.classList.toggle('dark', isDark);
-      localStorage.setItem('smartfit_theme', e.target.value);
+      db.setTheme(isDark ? 'dark' : 'light');
       const iconEl = document.getElementById('themeIcon');
       if (iconEl) iconEl.textContent = isDark ? '☀️' : '🌙';
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', isDark ? '#090d16' : '#f8fafc');
+      state.notify();
     });
   }
 
-  // Sincronización Manual Bidireccional Inmediata con Convex
+  // --- SINCRONIZACIÓN MANUAL ---
+  const ensureSyncKey = () => {
+    if (convex.hasSyncKey()) return true;
+    showToast('Configura la clave de sincronización para usar la nube.', 'warning', 5000);
+    inputSyncKey?.focus();
+    return false;
+  };
+
   if (btnSyncNow) {
     btnSyncNow.addEventListener('click', async () => {
-      const iconSync = container.querySelector('#iconSync');
-      const textSync = container.querySelector('#textSyncBtn');
-      
+      if (!ensureSyncKey()) return;
       if (!navigator.onLine) {
-        alert('Actualmente no tienes conexión a internet. Los datos están seguros en tu equipo y se sincronizarán al reconectar.');
+        showToast('Sin conexión. Los datos quedan guardados y se sincronizarán al reconectar.', 'warning', 5000);
         return;
       }
 
+      const iconSync = container.querySelector('#iconSync');
+      const textSync = container.querySelector('#textSyncBtn');
       btnSyncNow.disabled = true;
       if (iconSync) iconSync.textContent = '⏳';
-      if (textSync) textSync.textContent = 'Sincronizando...';
+      if (textSync) textSync.textContent = 'Sincronizando…';
 
       try {
         const res = await db.syncTwoWay();
@@ -520,61 +730,54 @@ function attachSettingsEvents(container, settings) {
           if (iconSync) iconSync.textContent = '✅';
           if (textSync) textSync.textContent = '¡Sincronizado!';
           if (textLastSync) textLastSync.textContent = new Date().toLocaleTimeString();
-
-          const infoMsg = `¡Sincronización Bidireccional Exitosa!\n\n` +
-            `• Nube ➔ Este dispositivo: ${res.importedWorkouts} nuevos entrenamientos descargados\n` +
-            `• Este dispositivo ➔ Nube: ${res.uploadedWorkouts} entrenamientos respaldados\n` +
-            `• Total en tu historial: ${res.totalWorkouts} sesiones disponibles\n` +
-            `• Mediciones corporales: ${res.totalMeas} registradas`;
-
-          alert(infoMsg);
-
-          // Actualizar reactividad global y re-renderizar módulo para reflejar tarjetas/bitácoras al instante
+          showToast(`Sincronizado: +${res.importedWorkouts} entrenos, +${res.importedMeas} mediciones.`, 'success', 5000);
           state.notify();
-          renderSettingsModule(container);
         } else {
-          alert('No se pudo completar la sincronización con Convex: ' + (res?.error || 'Revisa tu conexión'));
+          showToast(res?.error || 'No se pudo completar la sincronización.', 'error', 6000);
         }
       } catch (err) {
-        alert('Error durante la sincronización: ' + err.message);
+        showError(err, 'Error durante la sincronización.');
       } finally {
         btnSyncNow.disabled = false;
         setTimeout(() => {
           if (iconSync) iconSync.textContent = '☁️';
-          if (textSync) textSync.textContent = 'Sincronizar Historial Ahora';
+          if (textSync) textSync.textContent = 'Sincronizar ahora';
         }, 3000);
       }
     });
   }
 
-  // Restaurar / Pull desde Convex
   if (btnPullFromCloud) {
     btnPullFromCloud.addEventListener('click', async () => {
+      if (!ensureSyncKey()) return;
       if (!navigator.onLine) {
-        alert('Necesitas conexión a internet para descargar datos desde Convex.');
+        showToast('Necesitas conexión para descargar desde la nube.', 'warning');
         return;
       }
 
-      const confirmRestore = confirm('¿Deseas sincronizar y descargar todo el historial guardado en Convex Cloud hacia este dispositivo?');
-      if (!confirmRestore) return;
+      const ok = await confirmAction({
+        title: '¿Restaurar desde la nube?',
+        message: 'Se mezclarán los datos de la nube con este dispositivo. Los cambios locales más recientes se conservan por updatedAt.',
+        confirmText: 'Restaurar'
+      });
+      if (!ok) return;
 
       btnPullFromCloud.disabled = true;
-      btnPullFromCloud.textContent = '⏳ Sincronizando...';
+      btnPullFromCloud.textContent = '⏳ Sincronizando…';
 
       try {
         const res = await db.syncTwoWay();
         if (res.success) {
-          alert(`¡Historial sincronizado desde la nube!\n• Nuevos entrenamientos descargados: ${res.importedWorkouts}\n• Total entrenamientos: ${res.totalWorkouts}`);
+          showToast(`Historial restaurado: ${res.totalWorkouts} entrenos y ${res.totalMeas} mediciones.`, 'success', 5000);
           state.notify();
-          renderSettingsModule(container);
         } else {
-          alert('Error al descargar datos de la nube: ' + (res.error || 'Desconocido'));
+          showToast(res.error || 'Error al descargar datos de la nube.', 'error', 6000);
         }
       } catch (err) {
-        alert('Excepción al descargar datos: ' + err.message);
+        showError(err, 'Excepción al descargar datos.');
       } finally {
         btnPullFromCloud.disabled = false;
-        btnPullFromCloud.textContent = '📥 Restaurar desde la Nube';
+        btnPullFromCloud.textContent = '📥 Restaurar desde la nube';
       }
     });
   }
@@ -582,24 +785,37 @@ function attachSettingsEvents(container, settings) {
   if (btnExport) {
     btnExport.addEventListener('click', () => {
       db.exportAllData();
+      showToast('Copia de seguridad descargada.', 'success');
     });
   }
 
   if (fileImport) {
-    fileImport.addEventListener('change', (e) => {
+    fileImport.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
+
+      const ok = await confirmAction({
+        title: '¿Restaurar este respaldo?',
+        message: 'Los datos actuales de entrenamientos y mediciones serán reemplazados por los del archivo. El perfil y la nutrición también se restaurarán.',
+        confirmText: 'Restaurar',
+        danger: true
+      });
+      if (!ok) {
+        e.target.value = '';
+        return;
+      }
 
       const reader = new FileReader();
       reader.onload = (event) => {
         const res = db.importData(event.target.result);
         if (res.success) {
-          alert(`¡Datos restaurados con éxito! (${res.count} entrenamientos importados).`);
-          location.reload();
+          showToast(`Datos restaurados (${res.count} entrenamientos). Recargando…`, 'success');
+          setTimeout(() => location.reload(), 800);
         } else {
-          alert('Error al importar archivo: ' + res.error);
+          showToast('Error al importar: ' + res.error, 'error', 6000);
         }
       };
+      reader.onerror = () => showToast('No se pudo leer el archivo.', 'error');
       reader.readAsText(file);
     });
   }
@@ -607,43 +823,38 @@ function attachSettingsEvents(container, settings) {
   const btnClearCache = container.querySelector('#btnClearCacheReload');
   if (btnClearCache) {
     btnClearCache.addEventListener('click', async () => {
-      btnClearCache.disabled = true;
-      btnClearCache.innerHTML = '<span>⏳ Actualizando...</span>';
-      try {
-        // 1. Forzar recarga en la caché HTTP del navegador para todos los módulos JS y HTML
-        const filesToRefresh = [
-          './',
-          './index.html',
-          './sw.js',
-          './js/config.js',
-          './js/app.js',
-          './js/state.js',
-          './js/data/initialData.js',
-          './js/services/convex.js',
-          './js/services/db.js',
-          './js/services/timer.js',
-          './js/modules/workout.js',
-          './js/modules/nutrition.js',
-          './js/modules/analytics.js',
-          './js/modules/settings.js'
-        ];
-        await Promise.all(
-          filesToRefresh.map(url => fetch(url, { cache: 'reload' }).catch(() => {}))
-        );
+      const ok = await confirmAction({
+        title: '¿Forzar la actualización?',
+        message: 'Se limpiarán las cachés y el service worker. Tus datos de entrenamiento no se tocan. La app se recargará.',
+        confirmText: 'Actualizar'
+      });
+      if (!ok) return;
 
-        // 2. Eliminar todas las cachés del Service Worker
+      btnClearCache.disabled = true;
+      btnClearCache.innerHTML = '<span>⏳ Actualizando…</span>';
+      try {
+        const filesToRefresh = [
+          './', './index.html', './sw.js', './manifest.json',
+          './assets/css/tailwind.css', './assets/vendor/chart.umd.min.js',
+          './js/config.js', './js/app.js', './js/state.js',
+          './js/data/initialData.js', './js/services/convex.js', './js/services/db.js',
+          './js/services/timer.js', './js/services/merge.js',
+          './js/utils/escape.js', './js/ui/toast.js',
+          './js/modules/workout.js', './js/modules/workout-render.js', './js/modules/workout-utils.js',
+          './js/modules/nutrition.js',
+          './js/modules/analytics.js', './js/modules/settings.js'
+        ];
+        await Promise.all(filesToRefresh.map(url => fetch(url, { cache: 'reload' }).catch(() => {})));
+
         if ('caches' in window) {
           const keys = await caches.keys();
-          await Promise.all(keys.map(k => caches.delete(k)));
+          await Promise.all(keys.map(key => caches.delete(key)));
         }
-
-        // 3. Desregistrar Service Workers antiguos
         if ('serviceWorker' in navigator) {
           const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(r => r.unregister()));
+          await Promise.all(regs.map(reg => reg.unregister()));
         }
 
-        // 4. Redirigir con parámetro anti-caché
         const cleanUrl = window.location.origin + window.location.pathname;
         window.location.replace(`${cleanUrl}?v=${Date.now()}`);
       } catch (err) {
@@ -652,4 +863,13 @@ function attachSettingsEvents(container, settings) {
       }
     });
   }
+
+  return unsubscribe;
+}
+
+function showSavedIndicator(container, id) {
+  const indicator = container.querySelector(`#savedIndicator_${CSS.escape(id)}`);
+  if (!indicator) return;
+  indicator.classList.remove('opacity-0');
+  setTimeout(() => indicator.classList.add('opacity-0'), 1500);
 }

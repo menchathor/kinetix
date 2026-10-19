@@ -1,24 +1,78 @@
 // Módulo de Evolución, Gráficas de Sobrecarga Progresiva y Mediciones Corporales
 import { db, formatDisplayDate } from '../services/db.js';
-import { INITIAL_DATA } from '../data/initialData.js';
+import { escapeHtml, escapeAttr, toNumber } from '../utils/escape.js';
+import { showToast, confirmAction } from '../ui/toast.js';
 
 let weightChartInstance = null;
 let exerciseChartInstance = null;
+let analyticsEscapeHandler = null;
+
+function sortedAscending(measurements) {
+  return [...measurements]
+    .filter(measurement => measurement && measurement.date)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function computeComposition(measurements, profile) {
+  const sorted = sortedAscending(measurements);
+  const inbody = sorted.filter(m => String(m.source || '').toLowerCase().includes('inbody'));
+  const first = inbody[0] || sorted[0] || null;
+  const last = inbody[inbody.length - 1] || sorted[sorted.length - 1] || null;
+
+  const currentWeight = toNumber(last?.weight ?? last?.weightKg ?? profile.currentWeight);
+  const startWeight = toNumber(first?.weight ?? first?.weightKg ?? profile.startWeight) || currentWeight;
+  const weightDiff = startWeight > 0 && currentWeight > 0
+    ? Math.round((currentWeight - startWeight) * 10) / 10
+    : null;
+
+  const fatFreeMass = toNumber(last?.fatFreeMass ?? profile.fatFreeMass);
+  const visceralFat = toNumber(last?.visceralFat ?? profile.visceralFat);
+  const hasComparison = Boolean(first && last && first.date !== last.date);
+
+  const startFat = toNumber(first?.fatMassKg ?? first?.fatMass);
+  const endFat = toNumber(last?.fatMassKg ?? last?.fatMass);
+  const weightLost = startWeight > 0 && currentWeight > 0 ? Math.round((startWeight - currentWeight) * 10) / 10 : 0;
+  const fatLost = startFat > 0 && endFat >= 0 ? Math.round((startFat - endFat) * 10) / 10 : 0;
+  const pureFatPercent = weightLost > 0 && fatLost > 0 ? Math.round((fatLost / weightLost) * 100) : null;
+
+  return {
+    sorted,
+    first,
+    last,
+    hasComparison,
+    currentWeight,
+    startWeight,
+    weightDiff,
+    fatFreeMass,
+    visceralFat,
+    startFat,
+    endFat,
+    weightLost,
+    fatLost,
+    pureFatPercent,
+    startFatPercent: toNumber(first?.bodyFatPercent ?? first?.fatPercent),
+    endFatPercent: toNumber(last?.bodyFatPercent ?? last?.fatPercent),
+    startTrunkFat: toNumber(first?.trunkFat),
+    endTrunkFat: toNumber(last?.trunkFat),
+    startVisceral: toNumber(first?.visceralFat),
+    endVisceral: toNumber(last?.visceralFat),
+    startLean: toNumber(first?.fatFreeMass),
+    endLean: toNumber(last?.fatFreeMass ?? profile.fatFreeMass),
+    bmr: Math.round(toNumber(last?.bmr ?? profile.basalMetabolicRate))
+  };
+}
+
+function displayNumber(value, suffix = '') {
+  return value > 0 ? `${value}${suffix}` : '—';
+}
 
 export function renderAnalyticsModule(container) {
+  const profile = db.getProfile();
   const measurements = db.getMeasurements();
   const workoutLogs = db.getWorkoutLogs();
   const allExercises = db.getAllExercisesAnalytics();
+  const composition = computeComposition(measurements, profile);
 
-  // Buscar mediciones InBody clínicas y datos actuales
-  const inbodyMeas = measurements.find(m => m.source?.toLowerCase().includes('inbody')) || measurements[0] || {};
-  const currentWeight = Number(inbodyMeas.weight || inbodyMeas.weightKg || measurements[0]?.weight || 82.2);
-  const initialWeight = Number(INITIAL_DATA.profile.startWeight || 85.3);
-  const weightDiff = (currentWeight - initialWeight).toFixed(1);
-  const visceralLevel = inbodyMeas.visceralFat || INITIAL_DATA.profile.visceralFat || 8;
-  const leanMass = inbodyMeas.fatFreeMass || INITIAL_DATA.profile.fatFreeMass || 58.3;
-
-  // Agrupar todos los ejercicios por rutina para el selector completo
   const routinesOrder = [
     { id: 'torso1', label: '🏋️ Torso 1 (Lunes)' },
     { id: 'pierna1', label: '🦵 Pierna 1 (Martes)' },
@@ -26,22 +80,108 @@ export function renderAnalyticsModule(container) {
     { id: 'pierna2', label: '🔥 Pierna 2 (Viernes)' }
   ];
 
-  const exerciseOptionsHtml = routinesOrder.map(rGroup => {
-    const groupItems = allExercises.filter(ex => ex.routineId === rGroup.id);
+  const exerciseOptionsHtml = routinesOrder.map(group => {
+    const groupItems = allExercises.filter(ex => ex.routineId === group.id);
     if (groupItems.length === 0) return '';
     return `
-      <optgroup label="${rGroup.label}">
+      <optgroup label="${escapeAttr(group.label)}">
         ${groupItems.map(ex => {
-          const w = ex.stats?.targetWeight || ex.stats?.prWeight || ex.baseWeight || 0;
-          return `<option value="${ex.id}">${ex.name} (${w && w !== 'Auto' ? w + ' lb' : 'Peso libre'})</option>`;
+          const weight = ex.stats?.targetWeight || ex.stats?.prWeight || ex.baseWeight || 0;
+          return `<option value="${escapeAttr(ex.id)}">${escapeHtml(ex.name)} (${weight && weight !== 'Auto' ? `${weight} kg` : 'Peso libre'})</option>`;
         }).join('')}
       </optgroup>
     `;
   }).join('');
 
+  const comparisonRows = composition.hasComparison ? `
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Peso en báscula</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startWeight)}</span>
+          <span class="text-sm font-extrabold text-[var(--foreground)]">${displayNumber(composition.currentWeight)} kg</span>
+        </div>
+        <span class="text-[10px] font-bold ${composition.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'}">
+          ${composition.weightDiff === 0 ? 'Sin cambio' : `${composition.weightDiff < 0 ? '📉' : '📈'} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
+        </span>
+      </div>
+
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Masa grasa total</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startFat)}</span>
+          <span class="text-sm font-extrabold text-amber-500">${displayNumber(composition.endFat)} kg</span>
+        </div>
+        <span class="text-[10px] font-bold ${composition.fatLost >= 0 ? 'text-emerald-400' : 'text-amber-400'}">
+          ${composition.fatLost === 0 ? 'Sin cambio' : `${composition.fatLost > 0 ? '🔥' : '📈'} ${composition.fatLost > 0 ? '-' : '+'}${Math.abs(composition.fatLost)} kg grasa`}
+        </span>
+      </div>
+
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">% grasa corporal</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startFatPercent, '%')}</span>
+          <span class="text-sm font-extrabold text-amber-500">${displayNumber(composition.endFatPercent, '%')}</span>
+        </div>
+        <span class="text-[10px] font-bold text-emerald-400">
+          ${composition.startFatPercent > 0 && composition.endFatPercent > 0
+            ? `${composition.endFatPercent <= composition.startFatPercent ? '📉' : '📈'} ${(composition.endFatPercent - composition.startFatPercent).toFixed(1)}%`
+            : 'Sin comparación'}
+        </span>
+      </div>
+
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Grasa en tronco</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startTrunkFat)}</span>
+          <span class="text-sm font-extrabold text-[var(--foreground)]">${displayNumber(composition.endTrunkFat)} kg</span>
+        </div>
+        <span class="text-[10px] font-bold text-emerald-400">
+          ${composition.startTrunkFat > 0 && composition.endTrunkFat > 0
+            ? `🎯 ${(composition.endTrunkFat - composition.startTrunkFat).toFixed(2)} kg`
+            : 'Sin comparación'}
+        </span>
+      </div>
+
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Grasa visceral</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)] line-through">Nivel ${displayNumber(composition.startVisceral)}</span>
+          <span class="text-sm font-extrabold ${composition.endVisceral > 10 ? 'text-amber-400' : 'text-emerald-400'}">Nivel ${displayNumber(composition.endVisceral)}</span>
+        </div>
+        <span class="text-[10px] font-bold ${composition.endVisceral <= 10 ? 'text-emerald-400' : 'text-amber-400'}">
+          ${composition.endVisceral <= 10 ? 'Rango saludable (0-10)' : 'Sobre rango saludable'}
+        </span>
+      </div>
+
+      <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+        <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Masa libre de grasa</span>
+        <div class="flex items-baseline gap-1 mt-0.5">
+          <span class="text-xs text-[var(--muted-foreground)]">${displayNumber(composition.startLean)}</span>
+          <span class="text-sm font-extrabold text-blue-400">${displayNumber(composition.endLean)} kg</span>
+        </div>
+        <span class="text-[10px] font-bold text-blue-400">
+          ${composition.startLean > 0 && composition.endLean > 0
+            ? `${composition.endLean >= composition.startLean ? '🛡️' : '📉'} ${(composition.endLean - composition.startLean).toFixed(1)} kg`
+            : 'Sin comparación'}
+        </span>
+      </div>
+    </div>
+  ` : `
+    <div class="p-4 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
+      Registra al menos dos mediciones (idealmente InBody) para ver la comparación de recomposición.
+    </div>
+  `;
+
+  const synthesis = composition.hasComparison
+    ? (composition.weightLost > 0
+      ? `De los <b>${composition.weightLost} kg perdidos</b>, <b>${composition.fatLost > 0 ? composition.fatLost : 0} kg fueron grasa</b>${composition.pureFatPercent !== null ? ` (${composition.pureFatPercent}%)` : ''}. La masa libre de grasa pasó de <b>${composition.startLean || '—'} kg</b> a <b>${composition.endLean || '—'} kg</b>, y la grasa visceral de nivel <b>${composition.startVisceral || '—'}</b> a <b>${composition.endVisceral || '—'}</b>.`
+      : `Tu peso no bajó en este período, pero la composición cambió: grasa de <b>${composition.startFat || '—'} kg</b> a <b>${composition.endFat || '—'} kg</b> y masa libre de grasa de <b>${composition.startLean || '—'} kg</b> a <b>${composition.endLean || '—'} kg</b>.`)
+    : 'Aún no hay dos controles comparables. La tarjeta se calculará automáticamente cuando registres el siguiente.';
+
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
-      
+
       <!-- Cabecera -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between">
@@ -50,123 +190,65 @@ export function renderAnalyticsModule(container) {
             <p class="text-xs text-[var(--muted-foreground)]">Seguimiento de peso, grasa visceral y sobrecarga progresiva</p>
           </div>
           <button id="btnOpenNewMeasurementModal" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition-all">
-            + Nueva Medición
+            + Nueva medición
           </button>
         </div>
 
-        <!-- Indicadores Clave -->
         <div class="grid grid-cols-3 gap-2 mt-4 text-center">
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Peso Actual (InBody)</span>
-            <span class="text-base font-extrabold text-[var(--foreground)] block">${currentWeight} kg</span>
-            <span class="text-[10px] font-bold text-emerald-400">📉 ${weightDiff < 0 ? weightDiff : '+' + weightDiff} kg</span>
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Peso actual</span>
+            <span class="text-base font-extrabold text-[var(--foreground)] block">${displayNumber(composition.currentWeight)} kg</span>
+            <span class="text-[10px] font-bold ${composition.weightDiff !== null && composition.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'}">
+              ${composition.weightDiff === null ? 'Sin referencia' : `${composition.weightDiff < 0 ? '📉' : composition.weightDiff > 0 ? '📈' : '•'} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
+            </span>
           </div>
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Masa Libre de Grasa</span>
-            <span class="text-base font-extrabold text-blue-400 block">${leanMass} kg</span>
-            <span class="text-[10px] font-bold text-blue-400">🛡️ 100% Protegida</span>
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Masa libre de grasa</span>
+            <span class="text-base font-extrabold text-blue-400 block">${displayNumber(composition.fatFreeMass)} kg</span>
+            <span class="text-[10px] font-bold text-blue-400">${composition.fatFreeMass > 0 ? 'Último control' : 'Sin registro'}</span>
           </div>
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Grasa Visceral</span>
-            <span class="text-base font-extrabold text-emerald-400 block">Nivel ${visceralLevel}</span>
-            <span class="text-[10px] font-bold text-emerald-400">🎯 Meta lograda (0-10)</span>
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Grasa visceral</span>
+            <span class="text-base font-extrabold ${composition.visceralFat > 10 ? 'text-amber-400' : 'text-emerald-400'} block">${composition.visceralFat > 0 ? `Nivel ${composition.visceralFat}` : '—'}</span>
+            <span class="text-[10px] font-bold ${composition.visceralFat > 10 ? 'text-amber-400' : 'text-emerald-400'}">${composition.visceralFat > 10 ? 'Sobre rango' : 'Rango saludable (0-10)'}</span>
           </div>
         </div>
       </div>
 
-      <!-- RECOMPOSICIÓN CORPORAL INBODY: HITO MES 1 (07 SEP vs 12 OCT) -->
+      <!-- RECOMPOSICIÓN CORPORAL (calculada desde las mediciones) -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-emerald-500/30 shadow-xs space-y-3 relative overflow-hidden">
         <div class="absolute -right-8 -top-8 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
         <div class="flex items-center justify-between relative">
           <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-base">
-              🏆
-            </div>
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-base">🏆</div>
             <div>
               <div class="flex items-center gap-1.5">
                 <h3 class="text-sm font-bold text-[var(--foreground)]">Recomposición Corporal • Control InBody</h3>
-                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400">Mes 1</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">${composition.hasComparison ? 'Progreso' : 'Pendiente'}</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)]">Bioimpedancia clínica Smart Fit (07 Sep ➔ 12 Oct)</p>
+              <p class="text-[11px] text-[var(--muted-foreground)]">
+                ${composition.first && composition.last
+                  ? `${escapeHtml(formatDisplayDate(composition.first.date))} ➔ ${escapeHtml(formatDisplayDate(composition.last.date))}`
+                  : 'Sin mediciones suficientes'}
+              </p>
             </div>
           </div>
-          <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            ✓ 93.5% Grasa Pura
-          </span>
+          ${composition.pureFatPercent !== null ? `
+            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              ✓ ${composition.pureFatPercent}% grasa pura
+            </span>
+          ` : ''}
         </div>
 
-        <!-- 6 Métricas Comparativas Clave -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-          <!-- 1: Peso Báscula -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Peso en Báscula</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)] line-through">85.3</span>
-              <span class="text-sm font-extrabold text-[var(--foreground)]">82.2 kg</span>
-            </div>
-            <span class="text-[10px] font-bold text-emerald-400">📉 -3.1 kg total</span>
-          </div>
+        ${comparisonRows}
 
-          <!-- 2: Masa Grasa Pura -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Masa Grasa Total</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)] line-through">22.0</span>
-              <span class="text-sm font-extrabold text-amber-500">19.1 kg</span>
-            </div>
-            <span class="text-[10px] font-bold text-emerald-400">🔥 -2.9 kg grasa pura</span>
-          </div>
-
-          <!-- 3: % Grasa Corporal -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">% Grasa Corporal</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)] line-through">25.8%</span>
-              <span class="text-sm font-extrabold text-amber-500">23.2%</span>
-            </div>
-            <span class="text-[10px] font-bold text-emerald-400">📉 -2.6% grasa</span>
-          </div>
-
-          <!-- 4: Grasa del Tronco -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Grasa en Tronco</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)] line-through">16.45</span>
-              <span class="text-sm font-extrabold text-[var(--foreground)]">13.97 kg</span>
-            </div>
-            <span class="text-[10px] font-bold text-emerald-400">🎯 -2.48 kg abdomen</span>
-          </div>
-
-          <!-- 5: Grasa Visceral -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Grasa Visceral</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)] line-through">Nivel 9</span>
-              <span class="text-sm font-extrabold text-emerald-400">Nivel 8</span>
-            </div>
-            <span class="text-[10px] font-bold text-emerald-400">🏆 Meta lograda (0-10)</span>
-          </div>
-
-          <!-- 6: Masa Magra Libre de Grasa -->
-          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
-            <span class="text-[10px] font-semibold text-[var(--muted-foreground)] block">Masa Libre de Grasa</span>
-            <div class="flex items-baseline gap-1 mt-0.5">
-              <span class="text-xs text-[var(--muted-foreground)]">58.3</span>
-              <span class="text-sm font-extrabold text-blue-400">58.3 kg</span>
-            </div>
-            <span class="text-[10px] font-bold text-blue-400">🛡️ 100% Protegida intacta</span>
-          </div>
-        </div>
-
-        <!-- Síntesis Clínica & Fisiológica -->
         <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-1">
           <div class="flex items-center gap-1.5 font-bold text-emerald-400">
-            <span>🔬</span> Diagnóstico de Recomposición Fisiológica:
+            <span>🔬</span> Diagnóstico de recomposición fisiológica
           </div>
-          <p class="text-[11px] text-[var(--foreground)]/90 leading-relaxed">
-            Recomposición exitosa: de los <b>3.1 kg perdidos</b>, <b>2.9 kg fueron grasa pura (93.5%)</b>, blindando intactos los <b>58.3 kg de masa magra metabólica</b> y manteniendo una TMB activa de <b>1817 kcal</b>. La caída de <b>2.48 kg en grasa troncal</b> reduce drásticamente el riesgo cardiovascular y la resistencia periférica, favoreciendo el manejo de tu hipotiroidismo.
-          </p>
+          <p class="text-[11px] text-[var(--foreground)]/90 leading-relaxed">${synthesis}</p>
+          ${composition.bmr > 0 ? `<p class="text-[10px] text-[var(--muted-foreground)]">TMB del último control: <b>${composition.bmr} kcal/día</b></p>` : ''}
         </div>
       </div>
 
@@ -175,11 +257,11 @@ export function renderAnalyticsModule(container) {
         <div class="flex items-center justify-between mb-1">
           <h3 class="text-sm font-bold text-[var(--foreground)]">Evolución de Peso Corporal</h3>
           <div class="flex items-center gap-2 text-[10px]">
-            <span class="inline-flex items-center gap-1 text-blue-400 font-bold"><span class="w-2 h-2 rounded-full bg-blue-500"></span> InBody Clínico</span>
-            <span class="inline-flex items-center gap-1 text-amber-500 font-bold"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Eufy Hogar</span>
+            <span class="inline-flex items-center gap-1 text-blue-400 font-bold"><span class="w-2 h-2 rounded-full bg-blue-500"></span> InBody</span>
+            <span class="inline-flex items-center gap-1 text-amber-500 font-bold"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Báscula hogar</span>
           </div>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">Tendencia hacia el rango óptimo de recomposición (72 - 74 kg)</p>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">Tendencia hacia el rango óptimo (${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg)</p>
         <div class="h-56 relative">
           <canvas id="chartWeightTrend"></canvas>
         </div>
@@ -193,43 +275,46 @@ export function renderAnalyticsModule(container) {
             <p class="text-xs text-[var(--muted-foreground)]">Controles clínicos InBody y pesajes matutinos en hogar</p>
           </div>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
-            ${measurements.length} Registros
+            ${measurements.length} registros
           </span>
         </div>
 
         <div class="space-y-2">
-          ${measurements.map(m => {
-            const isClinic = m.source?.toLowerCase().includes('inbody');
+          ${measurements.length === 0 ? `
+            <div class="p-4 text-center text-xs text-[var(--muted-foreground)]">Todavía no hay mediciones. Usa "+ Nueva medición".</div>
+          ` : measurements.map(m => {
+            const isClinic = String(m.source || '').toLowerCase().includes('inbody');
             const dateStr = formatDisplayDate(m.date);
-            const w = m.weight !== undefined ? m.weight : m.weightKg;
-            const fatP = m.fatPercent || m.bodyFatPercent;
+            const weight = m.weight !== undefined ? m.weight : m.weightKg;
+            const fatPercent = m.fatPercent || m.bodyFatPercent;
             const lean = m.fatFreeMass || (m.muscleMass ? `${m.muscleMass} kg musc.` : null);
-            const visc = m.visceralFat;
+            const visceral = m.visceralFat;
             const trunk = m.trunkFat;
 
             return `
               <div class="p-3 rounded-xl bg-[var(--accent)]/30 border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
                 <div>
                   <div class="flex items-center gap-2 flex-wrap">
-                    <span class="font-extrabold text-[var(--foreground)] text-sm">${w} kg</span>
+                    <span class="font-extrabold text-[var(--foreground)] text-sm">${displayNumber(toNumber(weight))} kg</span>
                     <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isClinic ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}">
-                      ${isClinic ? '🏥 InBody Multicanal (Smart Fit)' : '🏠 Eufy Life (Báscula Hogar)'}
+                      ${isClinic ? '🏥 InBody multicanal' : '🏠 Báscula hogar'}
                     </span>
-                    <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${dateStr}</span>
+                    <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${escapeHtml(dateStr)}</span>
                   </div>
                   <div class="flex items-center gap-2 mt-1.5 text-[11px] text-[var(--muted-foreground)] flex-wrap">
-                    ${fatP ? `<span>Grasa: <strong class="text-[var(--foreground)]">${fatP}%</strong></span> •` : ''}
-                    ${visc ? `<span>Visceral: <strong class="${visc <= 8 ? 'text-emerald-400' : 'text-amber-500'}">Nivel ${visc}</strong></span> •` : ''}
-                    ${trunk ? `<span>Tronco: <strong class="text-[var(--foreground)]">${trunk} kg</strong></span> •` : ''}
-                    ${lean ? `<span>Masa Magra: <strong class="text-blue-400">${lean} kg</strong></span> •` : ''}
-                    ${m.bmr ? `<span>TMB: <strong class="text-[var(--foreground)]">${Math.round(m.bmr)} kcal</strong></span>` : ''}
+                    ${fatPercent ? `<span>Grasa: <strong class="text-[var(--foreground)]">${escapeHtml(fatPercent)}%</strong></span> •` : ''}
+                    ${visceral ? `<span>Visceral: <strong class="${visceral <= 10 ? 'text-emerald-400' : 'text-amber-400'}">Nivel ${escapeHtml(visceral)}</strong></span> •` : ''}
+                    ${trunk ? `<span>Tronco: <strong class="text-[var(--foreground)]">${escapeHtml(trunk)} kg</strong></span> •` : ''}
+                    ${lean ? `<span>Masa magra: <strong class="text-blue-400">${escapeHtml(lean)} kg</strong></span> •` : ''}
+                    ${m.bmr ? `<span>TMB: <strong class="text-[var(--foreground)]">${Math.round(toNumber(m.bmr))} kcal</strong></span>` : ''}
                   </div>
-                  ${m.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1">${m.notes}</p>` : ''}
+                  ${m.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1">${escapeHtml(m.notes)}</p>` : ''}
                 </div>
-                <div class="text-right shrink-0">
+                <div class="flex items-center gap-1.5 shrink-0">
                   <span class="text-[10px] font-bold px-2 py-1 rounded-lg ${isClinic ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--accent)] text-[var(--muted-foreground)]'}">
-                    ${isClinic ? 'Referencia Clínica' : 'Seguimiento Diario'}
+                    ${isClinic ? 'Referencia clínica' : 'Seguimiento diario'}
                   </span>
+                  <button type="button" class="btn-delete-measurement text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">🗑️</button>
                 </div>
               </div>
             `;
@@ -237,14 +322,14 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- GRÁFICA 2: SOBRECARGA PROGRESIVA POR EJERCICIO (TODAS LAS MÁQUINAS) -->
+      <!-- GRÁFICA 2: SOBRECARGA PROGRESIVA POR EJERCICIO -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Sobrecarga Progresiva por Máquina</h3>
-            <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones de las ${allExercises.length} máquinas del programa</p>
+            <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones de las ${allExercises.length} máquinas</p>
           </div>
-          <select id="selectExerciseForChart" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium max-w-full sm:max-w-xs">
+          <select id="selectExerciseForChart" aria-label="Seleccionar ejercicio para la gráfica" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium max-w-full sm:max-w-xs">
             ${exerciseOptionsHtml}
           </select>
         </div>
@@ -253,7 +338,7 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- HISTORIAL DE SESIONES COMPLETADAS (EXPANDIBLE Y EDITABLE) -->
+      <!-- HISTORIAL DE SESIONES COMPLETADAS -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between mb-3">
           <div>
@@ -261,12 +346,14 @@ export function renderAnalyticsModule(container) {
             <p class="text-xs text-[var(--muted-foreground)]">Toca una sesión para desplegar el detalle de ejercicios y cargas</p>
           </div>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
-            ${workoutLogs.length} Sesiones
+            ${workoutLogs.length} sesiones
           </span>
         </div>
 
         <div class="space-y-2.5">
-          ${workoutLogs.map((log, logIdx) => {
+          ${workoutLogs.length === 0 ? `
+            <div class="p-4 text-center text-xs text-[var(--muted-foreground)]">Aún no hay entrenamientos guardados.</div>
+          ` : workoutLogs.map((log, logIdx) => {
             const sessionId = log.id || log.sessionId || `idx_${logIdx}`;
             const exercisesList = log.exercises || [];
             const strengthExercises = exercisesList.filter(e => !e.isCardio);
@@ -275,18 +362,17 @@ export function renderAnalyticsModule(container) {
 
             return `
               <div class="rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] overflow-hidden text-xs transition-all">
-                <!-- Cabecera clicable del acordeón -->
                 <div class="p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-[var(--accent)]/70 transition-colors btn-toggle-workout-detail" data-target="workout-detail-${logIdx}">
                   <div class="min-w-0">
                     <div class="flex items-center gap-2 flex-wrap">
-                      <span class="font-bold text-[var(--foreground)] text-xs sm:text-sm">${log.routineName || 'Sesión'}</span>
+                      <span class="font-bold text-[var(--foreground)] text-xs sm:text-sm">${escapeHtml(log.routineName || 'Sesión')}</span>
                       <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)]">
-                        ${formatDisplayDate(log)}
+                        ${escapeHtml(formatDisplayDate(log))}
                       </span>
                       ${hasCardio ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold">🏃 Cardio ✓</span>` : ''}
                     </div>
                     <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
-                      ${strengthExercises.length} máquinas registradas ${log.durationMinutes ? `• ${log.durationMinutes} min` : ''}
+                      ${strengthExercises.length} máquinas registradas ${log.durationMinutes ? `• ${escapeHtml(log.durationMinutes)} min` : ''}
                     </p>
                   </div>
 
@@ -298,7 +384,6 @@ export function renderAnalyticsModule(container) {
                   </div>
                 </div>
 
-                <!-- Cuerpo expandible con desglose de series y botón eliminar -->
                 <div id="workout-detail-${logIdx}" class="hidden px-3 pb-3 pt-2 border-t border-[var(--border)]/60 bg-[var(--card)]/50 space-y-2">
                   ${exercisesList.length > 0 ? `
                     <div class="space-y-1.5">
@@ -307,16 +392,16 @@ export function renderAnalyticsModule(container) {
                         const setsToShow = completedSets.length > 0 ? completedSets : (ex.sets || []);
                         const isCardioItem = !!ex.isCardio;
                         const setsText = isCardioItem
-                          ? `${setsToShow[0]?.weight || 20} min Zona 2`
-                          : setsToShow.map(s => `${s.weight || 0} lb × ${s.reps || 0}`).join(' • ');
+                          ? `${Number(ex.minutes ?? setsToShow[0]?.weight) || 20} min Zona 2`
+                          : setsToShow.map(s => `${s.weight || 0} kg × ${s.reps || 0}${s.rpe ? ` @${s.rpe}` : ''}`).join(' • ');
 
                         return `
                           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1.5 px-2.5 rounded-lg bg-[var(--accent)]/40 border border-[var(--border)]/50">
                             <span class="font-semibold text-[var(--foreground)] text-[11px]">
-                              ${isCardioItem ? '🏃 ' : '🏋️ '}${ex.exerciseName || ex.exerciseId}
+                              ${isCardioItem ? '🏃 ' : '🏋️ '}${escapeHtml(ex.exerciseName || ex.exerciseId)}
                             </span>
                             <span class="font-mono text-[11px] text-amber-400 font-bold">
-                              ${setsText || 'Sin series'}
+                              ${escapeHtml(setsText || 'Sin series')}
                             </span>
                           </div>
                         `;
@@ -324,19 +409,17 @@ export function renderAnalyticsModule(container) {
                     </div>
                   ` : `<p class="text-[11px] text-[var(--muted-foreground)]">Sin desglose de ejercicios en esta sesión.</p>`}
 
-                  ${log.notes ? `<p class="text-[11px] text-[var(--muted-foreground)] italic pt-1">Nota: ${log.notes}</p>` : ''}
+                  ${log.notes ? `<p class="text-[11px] text-[var(--muted-foreground)] italic pt-1">Nota: ${escapeHtml(log.notes)}</p>` : ''}
 
-                  <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/50">
-                    <span class="text-[10px] font-mono text-[var(--muted-foreground)]">ID: ${sessionId}</span>
-                    ${sessionId !== 'session_baseline_20260910' ? `
-                      <button 
-                        type="button" 
-                        class="btn-delete-workout-session text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all flex items-center gap-1"
-                        data-session-id="${sessionId}"
-                        data-routine-name="${log.routineName || 'Sesión'}">
-                        🗑️ Eliminar sesión
-                      </button>
-                    ` : `<span class="text-[10px] text-blue-400 font-semibold">📌 Sesión Base Protegida</span>`}
+                  <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/50 gap-2">
+                    <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">ID: ${escapeHtml(sessionId)}</span>
+                    <button
+                      type="button"
+                      class="btn-delete-workout-session text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all flex items-center gap-1 shrink-0"
+                      data-session-id="${escapeAttr(sessionId)}"
+                      data-routine-name="${escapeAttr(log.routineName || 'Sesión')}">
+                      🗑️ Eliminar sesión
+                    </button>
                   </div>
                 </div>
               </div>
@@ -345,90 +428,84 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- MODAL COMPLETO PARA NUEVA MEDICIÓN CORPORAL / INBODY -->
-      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+      <!-- MODAL NUEVA MEDICIÓN -->
+      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="measurementModalTitle">
         <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
           <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
             <div>
-              <h3 class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
-              <p class="text-[11px] text-[var(--muted-foreground)]">Registra control InBody Smart Fit o pesaje Eufy en hogar</p>
+              <h3 id="measurementModalTitle" class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
+              <p class="text-[11px] text-[var(--muted-foreground)]">Registra control InBody o pesaje en hogar</p>
             </div>
-            <button id="btnCloseMeasModal" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-sm font-bold p-1">✕</button>
+            <button id="btnCloseMeasModal" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-sm font-bold p-1" aria-label="Cerrar">✕</button>
           </div>
 
           <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">
-            <!-- Fila 1: Fecha y Fuente -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Fecha</label>
+                <label for="inputMeasDate" class="font-bold text-[var(--foreground)] block mb-1">Fecha</label>
                 <input type="date" id="inputMeasDate" value="${new Date().toLocaleDateString('en-CA')}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Equipo / Fuente</label>
+                <label for="inputMeasSource" class="font-bold text-[var(--foreground)] block mb-1">Equipo / fuente</label>
                 <select id="inputMeasSource" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-medium">
-                  <option value="Eufy Life (Báscula hogar)">🏠 Eufy Life (Hogar)</option>
+                  <option value="Eufy Life (Báscula hogar)">🏠 Eufy Life (hogar)</option>
                   <option value="Smart Fit (InBody multicanal)">🏥 InBody (Smart Fit)</option>
-                  <option value="Manual">📝 Registro Manual</option>
+                  <option value="Manual">📝 Registro manual</option>
                 </select>
               </div>
             </div>
 
-            <!-- Fila 2: Peso y % Grasa -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Peso Corporal (kg) *</label>
-                <input type="number" step="0.1" id="inputMeasWeight" placeholder="Ej: 82.2" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasWeight" class="font-bold text-[var(--foreground)] block mb-1">Peso corporal (kg) *</label>
+                <input type="number" step="0.1" id="inputMeasWeight" placeholder="Ej: 75.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">% Grasa Corporal</label>
-                <input type="number" step="0.1" id="inputMeasFatPercent" placeholder="Ej: 23.2" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasFatPercent" class="font-bold text-[var(--foreground)] block mb-1">% grasa corporal</label>
+                <input type="number" step="0.1" id="inputMeasFatPercent" placeholder="Ej: 20.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
             </div>
 
-            <!-- Fila 3: Masa Grasa (kg) y Masa Libre de Grasa / Magra (kg) -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Masa Grasa (kg)</label>
-                <input type="number" step="0.1" id="inputMeasFatMass" placeholder="Ej: 19.1" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasFatMass" class="font-bold text-[var(--foreground)] block mb-1">Masa grasa (kg)</label>
+                <input type="number" step="0.1" id="inputMeasFatMass" placeholder="Ej: 18.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Masa Libre Grasa (kg)</label>
-                <input type="number" step="0.1" id="inputMeasFatFreeMass" placeholder="Ej: 58.3" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasFatFreeMass" class="font-bold text-[var(--foreground)] block mb-1">Masa libre de grasa (kg)</label>
+                <input type="number" step="0.1" id="inputMeasFatFreeMass" placeholder="Ej: 55.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
             </div>
 
-            <!-- Fila 4: Músculo Esquelético y Grasa Troncal -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Músculo Esquelético (kg)</label>
-                <input type="number" step="0.1" id="inputMeasMuscleMass" placeholder="Ej: 36.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasMuscleMass" class="font-bold text-[var(--foreground)] block mb-1">Músculo esquelético (kg)</label>
+                <input type="number" step="0.1" id="inputMeasMuscleMass" placeholder="Ej: 32.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Grasa en Tronco (kg)</label>
-                <input type="number" step="0.01" id="inputMeasTrunkFat" placeholder="Ej: 13.97" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasTrunkFat" class="font-bold text-[var(--foreground)] block mb-1">Grasa en tronco (kg)</label>
+                <input type="number" step="0.01" id="inputMeasTrunkFat" placeholder="Ej: 12.0" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
             </div>
 
-            <!-- Fila 5: Grasa Visceral y TMB -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Grasa Visceral (Nivel)</label>
-                <input type="number" id="inputMeasVisceral" placeholder="Ej: 8" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasVisceral" class="font-bold text-[var(--foreground)] block mb-1">Grasa visceral (nivel)</label>
+                <input type="number" id="inputMeasVisceral" placeholder="Ej: 6" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">TMB Basal (kcal)</label>
-                <input type="number" id="inputMeasBmr" placeholder="Ej: 1817" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                <label for="inputMeasBmr" class="font-bold text-[var(--foreground)] block mb-1">TMB basal (kcal)</label>
+                <input type="number" id="inputMeasBmr" placeholder="Ej: 1600" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
             </div>
 
-            <!-- Fila 6: Cintura y Notas -->
             <div class="grid grid-cols-2 gap-2.5">
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Cintura (cm)</label>
+                <label for="inputMeasWaist" class="font-bold text-[var(--foreground)] block mb-1">Cintura (cm)</label>
                 <input type="number" step="0.5" id="inputMeasWaist" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
               </div>
               <div>
-                <label class="font-bold text-[var(--foreground)] block mb-1">Notas adicionales</label>
+                <label for="inputMeasNotes" class="font-bold text-[var(--foreground)] block mb-1">Notas adicionales</label>
                 <input type="text" id="inputMeasNotes" placeholder="Ej: En ayunas 07:15" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
               </div>
             </div>
@@ -436,7 +513,7 @@ export function renderAnalyticsModule(container) {
 
           <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
             <button id="btnSaveMeasurement" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
-              Guardar y Sincronizar
+              Guardar y sincronizar
             </button>
             <button id="btnCancelMeasModal" class="px-4 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
               Cancelar
@@ -448,13 +525,13 @@ export function renderAnalyticsModule(container) {
     </div>
   `;
 
-  attachAnalyticsEvents(container, measurements, workoutLogs);
-  initWeightChart(measurements);
+  attachAnalyticsEvents(container);
+  initWeightChart(measurements, profile);
   const initialExId = container.querySelector('#selectExerciseForChart')?.value || 'chest_press';
   initExerciseChart(workoutLogs, initialExId);
 }
 
-function attachAnalyticsEvents(container, measurements, workoutLogs) {
+function attachAnalyticsEvents(container) {
   const modal = container.querySelector('#modalNewMeasurement');
   const btnOpen = container.querySelector('#btnOpenNewMeasurementModal');
   const btnClose = container.querySelector('#btnCloseMeasModal');
@@ -462,15 +539,31 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
   const btnSave = container.querySelector('#btnSaveMeasurement');
   const selectExercise = container.querySelector('#selectExerciseForChart');
 
+  const closeModal = () => {
+    modal?.classList.add('hidden');
+    btnOpen?.focus();
+  };
+
   if (btnOpen && modal) {
-    btnOpen.addEventListener('click', () => modal.classList.remove('hidden'));
+    btnOpen.addEventListener('click', () => {
+      modal.classList.remove('hidden');
+      container.querySelector('#inputMeasDate')?.focus();
+    });
   }
-  if (btnClose && modal) {
-    btnClose.addEventListener('click', () => modal.classList.add('hidden'));
+  if (btnClose) btnClose.addEventListener('click', closeModal);
+  if (btnCancel) btnCancel.addEventListener('click', closeModal);
+  if (modal) {
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeModal();
+    });
   }
-  if (btnCancel && modal) {
-    btnCancel.addEventListener('click', () => modal.classList.add('hidden'));
+  if (analyticsEscapeHandler) {
+    document.removeEventListener('keydown', analyticsEscapeHandler);
   }
+  analyticsEscapeHandler = (event) => {
+    if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+  };
+  document.addEventListener('keydown', analyticsEscapeHandler);
 
   if (btnSave && modal) {
     btnSave.addEventListener('click', () => {
@@ -488,7 +581,8 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
       const notes = container.querySelector('#inputMeasNotes')?.value || '';
 
       if (!weight || isNaN(weight)) {
-        alert('Por favor ingresa un peso válido en kg.');
+        showToast('Ingresa un peso válido en kg.', 'warning');
+        container.querySelector('#inputMeasWeight')?.focus();
         return;
       }
 
@@ -511,23 +605,22 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
         notes
       });
 
-      modal.classList.add('hidden');
+      showToast('Medición guardada.', 'success');
       renderAnalyticsModule(container);
     });
   }
 
   if (selectExercise) {
     selectExercise.addEventListener('change', (e) => {
-      initExerciseChart(workoutLogs, e.target.value);
+      initExerciseChart(db.getWorkoutLogs(), e.target.value);
     });
   }
 
-  // Acordeón para expandir/colapsar el detalle de cada sesión de entrenamiento
   container.querySelectorAll('.btn-toggle-workout-detail').forEach(header => {
     header.addEventListener('click', () => {
       const targetId = header.getAttribute('data-target');
-      const detailEl = container.querySelector(`#${targetId}`);
-      const arrowEl = container.querySelector(`#arrow-${targetId}`);
+      const detailEl = container.querySelector(`#${CSS.escape(targetId)}`);
+      const arrowEl = container.querySelector(`#arrow-${CSS.escape(targetId)}`);
       if (detailEl) {
         const isHidden = detailEl.classList.contains('hidden');
         detailEl.classList.toggle('hidden');
@@ -536,21 +629,42 @@ function attachAnalyticsEvents(container, measurements, workoutLogs) {
     });
   });
 
-  // Botón para eliminar una sesión de entrenamiento
   container.querySelectorAll('.btn-delete-workout-session').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const sessionId = btn.getAttribute('data-session-id');
       const routineName = btn.getAttribute('data-routine-name');
-      if (sessionId && confirm(`¿Eliminar la sesión "${routineName}" del historial?`)) {
-        db.deleteWorkoutSession(sessionId);
-        renderAnalyticsModule(container);
-      }
+      const ok = await confirmAction({
+        title: '¿Eliminar esta sesión?',
+        message: `Se eliminará "${routineName}" del historial local y de la nube en el próximo sync.`,
+        confirmText: 'Eliminar',
+        danger: true
+      });
+      if (!ok) return;
+      db.deleteWorkoutSession(sessionId);
+      showToast('Sesión eliminada.', 'success');
+      renderAnalyticsModule(container);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-measurement').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const date = btn.getAttribute('data-date');
+      const ok = await confirmAction({
+        title: '¿Eliminar esta medición?',
+        message: `Se eliminará la medición del ${formatDisplayDate(date)}. La eliminación se sincroniza con la nube.`,
+        confirmText: 'Eliminar',
+        danger: true
+      });
+      if (!ok) return;
+      db.deleteMeasurement(date);
+      showToast('Medición eliminada.', 'success');
+      renderAnalyticsModule(container);
     });
   });
 }
 
-function initWeightChart(measurements) {
+function initWeightChart(measurements, profile) {
   const canvas = document.getElementById('chartWeightTrend');
   if (!canvas || typeof Chart === 'undefined') return;
 
@@ -558,16 +672,20 @@ function initWeightChart(measurements) {
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
   const textColor = isDark ? '#94a3b8' : '#64748b';
 
-  const reversed = [...measurements].reverse();
-  const labels = reversed.map(m => (m.date ? m.date.slice(5) : '')); // MM-DD
-  const dataWeights = reversed.map(m => Number(m.weight !== undefined ? m.weight : m.weightKg) || 0);
-  const pointColors = reversed.map(m => (m.source && m.source.toLowerCase().includes('inbody')) ? '#3b82f6' : '#f59e0b');
-  const pointBorderColors = reversed.map(m => (m.source && m.source.toLowerCase().includes('inbody')) ? '#1d4ed8' : '#d97706');
-  const pointRadii = reversed.map(m => (m.source && m.source.toLowerCase().includes('inbody')) ? 7 : 5);
+  const ordered = sortedAscending(measurements);
+  const labels = ordered.map(m => (m.date ? m.date.slice(5) : ''));
+  const dataWeights = ordered.map(m => Number(m.weight !== undefined ? m.weight : m.weightKg) || 0);
+  const pointColors = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? '#3b82f6' : '#f59e0b'));
+  const pointBorderColors = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? '#1d4ed8' : '#d97706'));
+  const pointRadii = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? 7 : 5));
 
-  if (weightChartInstance) {
-    weightChartInstance.destroy();
-  }
+  const targetMax = Number(profile.targetWeightMax) || 74;
+  const targetMin = Number(profile.targetWeightMin) || 72;
+  const allValues = [...dataWeights, targetMax, targetMin].filter(value => value > 0);
+  const yMin = allValues.length > 0 ? Math.max(0, Math.floor(Math.min(...allValues) - 2)) : 60;
+  const yMax = allValues.length > 0 ? Math.ceil(Math.max(...allValues) + 2) : 100;
+
+  if (weightChartInstance) weightChartInstance.destroy();
 
   weightChartInstance = new Chart(canvas, {
     type: 'line',
@@ -575,7 +693,7 @@ function initWeightChart(measurements) {
       labels,
       datasets: [
         {
-          label: 'Peso Registrado (kg)',
+          label: 'Peso registrado (kg)',
           data: dataWeights,
           borderColor: 'rgba(245, 158, 11, 0.7)',
           backgroundColor: 'rgba(245, 158, 11, 0.12)',
@@ -588,8 +706,8 @@ function initWeightChart(measurements) {
           pointBorderWidth: 2
         },
         {
-          label: 'Meta Máxima (74 kg)',
-          data: labels.map(() => 74),
+          label: `Meta máxima (${targetMax} kg)`,
+          data: labels.map(() => targetMax),
           borderColor: '#10b981',
           borderDash: [5, 5],
           borderWidth: 1.5,
@@ -603,8 +721,8 @@ function initWeightChart(measurements) {
       maintainAspectRatio: false,
       scales: {
         y: {
-          min: 70,
-          max: 88,
+          min: yMin,
+          max: yMax,
           grid: { color: gridColor },
           ticks: { color: textColor }
         },
@@ -614,9 +732,7 @@ function initWeightChart(measurements) {
         }
       },
       plugins: {
-        legend: {
-          labels: { color: textColor, font: { size: 10 } }
-        },
+        legend: { labels: { color: textColor, font: { size: 10 } } },
         tooltip: {
           backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
           titleColor: isDark ? '#f8fafc' : '#0f172a',
@@ -627,18 +743,18 @@ function initWeightChart(measurements) {
           callbacks: {
             title: (items) => {
               const idx = items[0]?.dataIndex;
-              const m = reversed[idx];
-              return m ? `${m.date} • ${m.source || 'Báscula'}` : '';
+              const measurement = ordered[idx];
+              return measurement ? `${measurement.date} • ${measurement.source || 'Báscula'}` : '';
             },
             label: (context) => {
               if (context.datasetIndex === 0) {
                 const idx = context.dataIndex;
-                const m = reversed[idx];
+                const measurement = ordered[idx];
                 const lines = [`Peso: ${context.parsed.y} kg`];
-                const fat = m?.fatPercent || m?.bodyFatPercent;
-                if (fat) lines.push(`Grasa Corporal: ${fat}%`);
-                if (m?.fatFreeMass) lines.push(`Masa Libre de Grasa: ${m.fatFreeMass} kg`);
-                if (m?.visceralFat) lines.push(`Grasa Visceral: Nivel ${m.visceralFat}`);
+                const fat = measurement?.fatPercent || measurement?.bodyFatPercent;
+                if (fat) lines.push(`Grasa corporal: ${fat}%`);
+                if (measurement?.fatFreeMass) lines.push(`Masa libre de grasa: ${measurement.fatFreeMass} kg`);
+                if (measurement?.visceralFat) lines.push(`Grasa visceral: Nivel ${measurement.visceralFat}`);
                 return lines;
               }
               return `${context.dataset.label}: ${context.parsed.y} kg`;
@@ -654,35 +770,34 @@ function initExerciseChart(workoutLogs, exerciseId) {
   const canvas = document.getElementById('chartExerciseProgression');
   if (!canvas || typeof Chart === 'undefined') return;
 
-  // Extraer puntos históricos de este ejercicio
   const labels = [];
   const weights = [];
   const reps = [];
+  const isDark = document.documentElement.classList.contains('dark');
+  const textColor = isDark ? '#94a3b8' : '#64748b';
 
   const reversed = [...workoutLogs].reverse();
   reversed.forEach(session => {
-    if (session.exercises) {
-      const ex = session.exercises.find(e => e.exerciseId === exerciseId);
-      if (ex && ex.sets && ex.sets.length > 0) {
-        const completedSets = ex.sets.filter(s => s.completed);
-        const pool = completedSets.length > 0 ? completedSets : ex.sets;
-        // Seleccionar el set de mayor carga (o mayores reps a igual carga)
-        const bestSet = pool.reduce((best, cur) => {
-          const curW = parseFloat(cur.weight) || 0;
-          const bestW = parseFloat(best.weight) || 0;
-          if (curW > bestW) return cur;
-          if (curW === bestW && (parseInt(cur.reps) || 0) > (parseInt(best.reps) || 0)) return cur;
-          return best;
-        }, pool[0]);
+    if (!Array.isArray(session.exercises)) return;
+    const exercise = session.exercises.find(item => item.exerciseId === exerciseId);
+    if (!exercise || !Array.isArray(exercise.sets) || exercise.sets.length === 0) return;
 
-        if (bestSet && (bestSet.weight || bestSet.reps)) {
-          const dateStr = session.date || (session.startTime ? session.startTime.split('T')[0] : '');
-          if (dateStr) {
-            labels.push(dateStr.slice(5, 10));
-            weights.push(parseFloat(bestSet.weight) || 0);
-            reps.push(parseInt(bestSet.reps) || 0);
-          }
-        }
+    const completedSets = exercise.sets.filter(set => set.completed);
+    const pool = completedSets.length > 0 ? completedSets : exercise.sets;
+    const bestSet = pool.reduce((best, current) => {
+      const currentWeight = parseFloat(current.weight) || 0;
+      const bestWeight = parseFloat(best.weight) || 0;
+      if (currentWeight > bestWeight) return current;
+      if (currentWeight === bestWeight && (parseInt(current.reps) || 0) > (parseInt(best.reps) || 0)) return current;
+      return best;
+    }, pool[0]);
+
+    if (bestSet && (bestSet.weight || bestSet.reps)) {
+      const dateStr = session.date || (session.startTime ? session.startTime.split('T')[0] : '');
+      if (dateStr) {
+        labels.push(dateStr.slice(5, 10));
+        weights.push(parseFloat(bestSet.weight) || 0);
+        reps.push(parseInt(bestSet.reps) || 0);
       }
     }
   });
@@ -690,17 +805,15 @@ function initExerciseChart(workoutLogs, exerciseId) {
   const stats = db.getExerciseEvolutionStats(exerciseId);
   const fallbackWeight = stats?.targetWeight || stats?.baselineWeight || 0;
 
-  if (exerciseChartInstance) {
-    exerciseChartInstance.destroy();
-  }
+  if (exerciseChartInstance) exerciseChartInstance.destroy();
 
   exerciseChartInstance = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: labels.length > 0 ? labels : ['Base Configurada'],
+      labels: labels.length > 0 ? labels : ['Base configurada'],
       datasets: [
         {
-          label: 'Carga (lb / placa)',
+          label: 'Carga (kg / placa)',
           data: weights.length > 0 ? weights : [fallbackWeight],
           backgroundColor: '#3b82f6',
           borderRadius: 6,
@@ -725,9 +838,9 @@ function initExerciseChart(workoutLogs, exerciseId) {
           type: 'linear',
           display: true,
           position: 'left',
-          title: { display: true, text: 'Placa', color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' },
-          grid: { color: document.documentElement.classList.contains('dark') ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)' },
-          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
+          title: { display: true, text: 'Carga (kg)', color: textColor },
+          grid: { color: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)' },
+          ticks: { color: textColor }
         },
         y1: {
           type: 'linear',
@@ -735,19 +848,17 @@ function initExerciseChart(workoutLogs, exerciseId) {
           position: 'right',
           title: { display: true, text: 'Reps', color: '#10b981' },
           min: 0,
-          max: 15,
+          max: 20,
           grid: { display: false },
-          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
+          ticks: { color: textColor }
         },
         x: {
           grid: { display: false },
-          ticks: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b' }
+          ticks: { color: textColor }
         }
       },
       plugins: {
-        legend: {
-          labels: { color: document.documentElement.classList.contains('dark') ? '#94a3b8' : '#64748b', font: { size: 10 } }
-        }
+        legend: { labels: { color: textColor, font: { size: 10 } } }
       }
     }
   });

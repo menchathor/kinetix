@@ -1,12 +1,25 @@
-// Módulo de Nutrición, Hidratación y Pauta Clínica (Guía de Referencia)
+// Módulo de Nutrición, Hidratación y Pauta Clínica.
+// Incluye seguimiento diario (medicación, agua y comidas) sincronizado.
 import { INITIAL_DATA } from '../data/initialData.js';
+import { db } from '../services/db.js';
+import { escapeHtml, escapeAttr } from '../utils/escape.js';
+
+function formatWater(ml) {
+  return `${(Number(ml) / 1000).toFixed(2)} L`;
+}
 
 export function renderNutritionModule(container) {
   const nutritionData = INITIAL_DATA.nutrition;
+  const profile = db.getProfile();
+  const today = db.getTodayNutrition();
+  const goal = Number(nutritionData.targetWaterMl) || 3000;
+  const meals = nutritionData.meals.filter(meal => meal.id !== 'medication');
+  const completedMeals = today.completedMeals || {};
+  const waterPercent = Math.min(100, Math.round((Number(today.waterMl) || 0) / goal * 100));
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
-      
+
       <!-- Cabecera de Macros Diarios -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between pb-3 border-b border-[var(--border)]">
@@ -17,14 +30,15 @@ export function renderNutritionModule(container) {
                 Pauta de Referencia
               </span>
             </div>
-            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">Recomposición Corporal • Protección Muscular (58.3 kg magros) & Tiroidea</p>
+            <p class="text-xs text-[var(--muted-foreground)] mt-0.5">
+              Recomposición Corporal${profile.fatFreeMass > 0 ? ` • Protección de ${profile.fatFreeMass} kg magros` : ''} & Tiroidea
+            </p>
           </div>
           <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
             ~${nutritionData.targetCalories} kcal
           </span>
         </div>
 
-        <!-- Target Macros Grid -->
         <div class="grid grid-cols-3 gap-2 mt-3 text-center">
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Proteína</span>
@@ -44,9 +58,48 @@ export function renderNutritionModule(container) {
         </div>
       </div>
 
-      <!-- PILARES CLÍNICOS DIARIOS (SOLO CONSULTA) -->
+      <!-- SEGUIMIENTO DIARIO -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-bold text-[var(--foreground)]">Seguimiento de Hoy</h3>
+          <span id="nutritionSaveState" class="text-[10px] font-semibold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <!-- Medicación -->
+          <label class="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] cursor-pointer">
+            <input id="medicationToggle" type="checkbox" ${today.medicationTaken ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-emerald-500" />
+            <span>
+              <span class="text-xs font-bold text-[var(--foreground)] block">Levotiroxina en ayunas</span>
+              <span class="text-[10px] text-[var(--muted-foreground)] block">06:30 – 07:00 • con 250-300 ml de agua</span>
+              ${today.medicationTaken && today.medicationTime ? `<span class="text-[10px] text-emerald-400 font-bold block mt-1">Registrada ${escapeHtml(today.medicationTime)}</span>` : ''}
+            </span>
+          </label>
+
+          <!-- Hidratación -->
+          <div class="p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-[var(--foreground)]">💧 Hidratación</span>
+              <span id="waterLabel" class="text-[11px] font-mono font-bold text-blue-400">${formatWater(today.waterMl)} / ${formatWater(goal)}</span>
+            </div>
+            <div class="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden mt-2">
+              <div id="waterBar" class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style="width: ${waterPercent}%"></div>
+            </div>
+            <div class="flex items-center gap-1.5 mt-2">
+              <button type="button" id="btnWaterMinus" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--accent)]" aria-label="Restar 250 ml de agua">−250</button>
+              <button type="button" id="btnWaterPlus" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 250 ml de agua">+250</button>
+              <button type="button" id="btnWaterPlus500" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 500 ml de agua">+500</button>
+            </div>
+          </div>
+        </div>
+
+        <p class="text-[10px] text-[var(--muted-foreground)] mt-2">
+          Los registros de hoy se sincronizan con tu perfil y se restauran en otros dispositivos.
+        </p>
+      </div>
+
+      <!-- PILARES CLÍNICOS DIARIOS -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <!-- Pilar 1: Protocolo Levotiroxina -->
         <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs flex flex-col justify-between">
           <div>
             <div class="flex items-center justify-between gap-2 mb-2">
@@ -76,7 +129,6 @@ export function renderNutritionModule(container) {
           </div>
         </div>
 
-        <!-- Pilar 2: Distribución de Hidratación 3.0L -->
         <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs flex flex-col justify-between">
           <div>
             <div class="flex items-center justify-between gap-2 mb-2">
@@ -84,7 +136,7 @@ export function renderNutritionModule(container) {
                 <span class="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-base">💧</span>
                 <div>
                   <h3 class="font-bold text-xs sm:text-sm text-[var(--foreground)]">Pauta de Hidratación</h3>
-                  <span class="text-[10px] font-mono text-blue-400 font-bold">Meta Base: ${(nutritionData.targetWaterMl / 1000).toFixed(1)} Litros / día</span>
+                  <span class="text-[10px] font-mono text-blue-400 font-bold">Meta: ${(goal / 1000).toFixed(1)} L / día</span>
                 </div>
               </div>
               <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">Distribución</span>
@@ -113,41 +165,48 @@ export function renderNutritionModule(container) {
           <h3 class="text-xs uppercase font-bold tracking-wider text-[var(--muted-foreground)]">
             Estructura Diaria de Comidas (Alineada al Entreno 18:00 hrs)
           </h3>
-          <span class="text-[10px] text-[var(--muted-foreground)]">${nutritionData.meals.filter(m => m.id !== 'medication').length} Tiempos de Comida</span>
+          <span class="text-[10px] text-[var(--muted-foreground)]">${meals.length} Tiempos de Comida</span>
         </div>
 
-        ${nutritionData.meals.filter(meal => meal.id !== 'medication').map((meal, idx) => `
-          <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-            <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]/60">
-              <div class="flex items-center gap-2">
-                <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
-                  #${idx + 1} • ${meal.time}
-                </span>
-                <h4 class="font-bold text-sm text-[var(--foreground)]">${meal.name}</h4>
+        ${meals.map((meal, idx) => {
+          const done = !!completedMeals[meal.id];
+          return `
+            <div data-meal-card class="bg-[var(--card)] rounded-2xl p-4 border ${done ? 'border-emerald-500/40' : 'border-[var(--border)]'} shadow-xs transition-colors">
+              <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]/60">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                    #${idx + 1} • ${escapeHtml(meal.time)}
+                  </span>
+                  <h4 class="font-bold text-sm text-[var(--foreground)]">${escapeHtml(meal.name)}</h4>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                    🎯 ${escapeHtml(meal.badge)}
+                  </span>
+                  <label class="flex items-center gap-1 text-[10px] font-bold text-[var(--muted-foreground)] cursor-pointer">
+                    <input type="checkbox" class="meal-toggle h-4 w-4 accent-emerald-500" data-meal="${escapeAttr(meal.id)}" ${done ? 'checked' : ''} />
+                    <span>Hecha</span>
+                  </label>
+                </div>
               </div>
-              <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-                🎯 ${meal.badge}
-              </span>
+
+              <ul class="mt-3 space-y-2 text-xs text-[var(--foreground)]/90">
+                ${meal.items.map(item => `
+                  <li class="flex items-start gap-2">
+                    <span class="text-amber-500 font-bold mt-0.5">▸</span>
+                    <span class="leading-relaxed">${escapeHtml(item)}</span>
+                  </li>
+                `).join('')}
+              </ul>
+
+              ${meal.notes ? `
+                <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 text-[11px] text-[var(--muted-foreground)] border-l-2 border-amber-500">
+                  💡 <b class="text-[var(--foreground)]">Clave fisiológica:</b> ${escapeHtml(meal.notes)}
+                </div>
+              ` : ''}
             </div>
-
-            <!-- Lista de Alimentos -->
-            <ul class="mt-3 space-y-2 text-xs text-[var(--foreground)]/90">
-              ${meal.items.map(item => `
-                <li class="flex items-start gap-2">
-                  <span class="text-amber-500 font-bold mt-0.5">▸</span>
-                  <span class="leading-relaxed">${item}</span>
-                </li>
-              `).join('')}
-            </ul>
-
-            <!-- Nota Médica / Nutricional -->
-            ${meal.notes ? `
-              <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 text-[11px] text-[var(--muted-foreground)] border-l-2 border-amber-500">
-                💡 <b class="text-[var(--foreground)]">Clave fisiológica:</b> ${meal.notes}
-              </div>
-            ` : ''}
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
 
       <!-- GUÍA RÁPIDA DE EQUIVALENCIAS E INTERCAMBIOS -->
@@ -158,7 +217,6 @@ export function renderNutritionModule(container) {
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-          <!-- Proteínas -->
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
             <span class="text-[11px] font-extrabold text-blue-400 block">🥩 ~35-40g Proteína Magra</span>
             <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
@@ -169,7 +227,6 @@ export function renderNutritionModule(container) {
             </ul>
           </div>
 
-          <!-- Carbohidratos -->
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
             <span class="text-[11px] font-extrabold text-amber-400 block">🍚 ~30-35g Carbohidratos</span>
             <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
@@ -180,7 +237,6 @@ export function renderNutritionModule(container) {
             </ul>
           </div>
 
-          <!-- Grasas Buenas -->
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
             <span class="text-[11px] font-extrabold text-emerald-400 block">🥑 ~10-12g Grasas Saludables</span>
             <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
@@ -195,5 +251,70 @@ export function renderNutritionModule(container) {
 
     </div>
   `;
+
+  attachNutritionEvents(container, today, goal);
 }
 
+function attachNutritionEvents(container, today, goal) {
+  const stateEl = container.querySelector('#nutritionSaveState');
+  const waterLabel = container.querySelector('#waterLabel');
+  const waterBar = container.querySelector('#waterBar');
+
+  const persist = () => {
+    db.saveNutrition(today.date, today);
+    if (stateEl) {
+      stateEl.classList.remove('opacity-0');
+      setTimeout(() => stateEl.classList.add('opacity-0'), 1200);
+    }
+  };
+
+  const updateWaterUI = () => {
+    const water = Math.max(0, Number(today.waterMl) || 0);
+    if (waterLabel) waterLabel.textContent = `${formatWater(water)} / ${formatWater(goal)}`;
+    if (waterBar) waterBar.style.width = `${Math.min(100, Math.round(water / goal * 100))}%`;
+  };
+
+  const changeWater = (delta) => {
+    today.waterMl = Math.max(0, (Number(today.waterMl) || 0) + delta);
+    updateWaterUI();
+    persist();
+  };
+
+  container.querySelector('#btnWaterPlus')?.addEventListener('click', () => changeWater(250));
+  container.querySelector('#btnWaterPlus500')?.addEventListener('click', () => changeWater(500));
+  container.querySelector('#btnWaterMinus')?.addEventListener('click', () => changeWater(-250));
+
+  const medicationToggle = container.querySelector('#medicationToggle');
+  if (medicationToggle) {
+    medicationToggle.addEventListener('change', () => {
+      today.medicationTaken = medicationToggle.checked;
+      today.medicationTime = medicationToggle.checked
+        ? new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      persist();
+      if (medicationToggle.checked) {
+        const note = medicationToggle.closest('label')?.querySelector('.text-emerald-400');
+        if (!note) {
+          const span = document.createElement('span');
+          span.className = 'text-[10px] text-emerald-400 font-bold block mt-1';
+          span.textContent = `Registrada ${today.medicationTime}`;
+          medicationToggle.closest('label')?.querySelector('span')?.appendChild(span);
+        }
+      }
+    });
+  }
+
+  container.querySelectorAll('.meal-toggle').forEach(toggle => {
+    toggle.addEventListener('change', () => {
+      const mealId = toggle.dataset.meal;
+      if (!today.completedMeals || typeof today.completedMeals !== 'object') today.completedMeals = {};
+      today.completedMeals[mealId] = toggle.checked;
+      persist();
+      const card = toggle.closest('[data-meal-card]');
+      if (card) {
+        card.classList.toggle('border-emerald-500/40', toggle.checked);
+        card.classList.toggle('border-[var(--border)]', !toggle.checked);
+      }
+    });
+  });
+}
