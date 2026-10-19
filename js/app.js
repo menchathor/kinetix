@@ -222,7 +222,7 @@ class App {
       if (!navigator.onLine || !convex.hasSyncKey()) return;
       try {
         const res = await db.syncTwoWay();
-        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0)) {
+        if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0 || res.profileApplied)) {
           debugLog(`[AutoSync:${source}] +${res.importedWorkouts} entrenos, +${res.importedMeas} mediciones.`);
           state.notify();
         }

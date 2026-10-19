@@ -603,8 +603,9 @@ export class StorageService {
     const cloudProfileVersion = toTimestamp(cloudProfile?.updatedAt);
     const localProfileVersion = toTimestamp(localProfile.updatedAt);
     let uploadedProfile = false;
+    let profileApplied = false;
     if (cloudProfile && cloudProfileVersion > localProfileVersion) {
-      this.applyCloudProfile(cloudProfile);
+      profileApplied = this.applyCloudProfile(cloudProfile);
     } else if (localProfileVersion > cloudProfileVersion) {
       const profilePush = await convex.syncProfile(localProfile);
       uploadedProfile = Boolean(profilePush?.success);
@@ -674,6 +675,7 @@ export class StorageService {
       importedWeights,
       uploadedNutrition,
       uploadedProfile,
+      profileApplied,
       deletionsApplied: pushRes?.data?.deletionsApplied ?? 0,
       totalWorkouts,
       totalMeas
@@ -963,6 +965,10 @@ export class StorageService {
           if (log?.date) writeJson(this.getNutritionKey(log.date), log);
         }
       }
+
+      // Un respaldo restaurado es la nueva verdad: no debe quedar bloqueado
+      // por eliminaciones pendientes de una sesión anterior.
+      localStorage.removeItem(KEYS.TOMBSTONES);
 
       localStorage.setItem(KEYS.SEED_FLAG, SEED_VERSION);
       this.scheduleMirror();
