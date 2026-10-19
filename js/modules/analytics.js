@@ -252,19 +252,30 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
-      <!-- GRÁFICA 1: TENDENCIA DE PESO Y META -->
+      <!-- GRÁFICA 1: EVOLUCIÓN MENSUAL DE PESO POR EQUIPO -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <div class="flex items-center justify-between mb-1">
-          <h3 class="text-sm font-bold text-[var(--foreground)]">Evolución de Peso Corporal</h3>
-          <div class="flex items-center gap-2 text-[10px]">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+          <h3 class="text-sm font-bold text-[var(--foreground)]">Evolución mensual de peso</h3>
+          <div class="flex flex-wrap items-center gap-2 text-[10px]">
             <span class="inline-flex items-center gap-1 text-blue-400 font-bold"><span class="w-2 h-2 rounded-full bg-blue-500"></span> InBody</span>
             <span class="inline-flex items-center gap-1 text-amber-500 font-bold"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Báscula hogar</span>
+            <span class="inline-flex items-center gap-1 text-emerald-400 font-bold"><span class="w-4 border-t border-dashed border-emerald-400"></span> Meta</span>
           </div>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">Tendencia hacia el rango óptimo (${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg)</p>
-        <div class="h-56 relative">
-          <canvas id="chartWeightTrend"></canvas>
-        </div>
+        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+          Última medición de cada mes por equipo. Rango objetivo ${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg.
+        </p>
+        ${measurements.length === 0 ? `
+          <div class="h-56 flex flex-col items-center justify-center rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] text-center px-4">
+            <span class="text-2xl mb-2" aria-hidden="true">📊</span>
+            <p class="text-xs font-semibold text-[var(--foreground)]">Aún no hay mediciones para graficar</p>
+            <p class="text-[11px] text-[var(--muted-foreground)] mt-1">Registra tu primer control con “+ Nueva medición”.</p>
+          </div>
+        ` : `
+          <div class="h-64 relative">
+            <canvas id="chartWeightTrend"></canvas>
+          </div>
+        `}
       </div>
 
       <!-- BITÁCORA DE MEDICIONES & BIOIMPEDANCIA -->
@@ -664,6 +675,39 @@ function attachAnalyticsEvents(container) {
   });
 }
 
+// Agrupa por mes y equipo: la última medición de cada mes para InBody y
+// para báscula hogar. Devuelve null cuando un equipo no midió ese mes.
+function buildMonthlyWeightSeries(measurements) {
+  const monthMap = new Map();
+
+  sortedAscending(measurements).forEach((measurement) => {
+    if (!measurement.date || !/^\d{4}-\d{2}/.test(measurement.date)) return;
+    const weight = Number(measurement.weight) || Number(measurement.weightKg) || 0;
+    if (weight <= 0) return;
+
+    const monthKey = measurement.date.slice(0, 7);
+    const category = String(measurement.source || '').toLowerCase().includes('inbody') ? 'inbody' : 'home';
+    const bucket = monthMap.get(monthKey) || {};
+    const previous = bucket[category];
+
+    if (!previous || measurement.date >= previous.date) {
+      bucket[category] = { ...measurement, weight };
+    }
+    monthMap.set(monthKey, bucket);
+  });
+
+  const keys = Array.from(monthMap.keys()).sort();
+
+  return {
+    keys,
+    labels: keys.map((key) => `${key.slice(5, 7)}/${key.slice(0, 4)}`),
+    inbodyData: keys.map((key) => monthMap.get(key)?.inbody?.weight ?? null),
+    homeData: keys.map((key) => monthMap.get(key)?.home?.weight ?? null),
+    inbodyMeta: keys.map((key) => monthMap.get(key)?.inbody || null),
+    homeMeta: keys.map((key) => monthMap.get(key)?.home || null)
+  };
+}
+
 function initWeightChart(measurements, profile) {
   const canvas = document.getElementById('chartWeightTrend');
   if (!canvas || typeof Chart === 'undefined') return;
@@ -672,67 +716,98 @@ function initWeightChart(measurements, profile) {
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
   const textColor = isDark ? '#94a3b8' : '#64748b';
 
-  const ordered = sortedAscending(measurements);
-  const labels = ordered.map(m => (m.date ? m.date.slice(5) : ''));
-  const dataWeights = ordered.map(m => Number(m.weight !== undefined ? m.weight : m.weightKg) || 0);
-  const pointColors = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? '#3b82f6' : '#f59e0b'));
-  const pointBorderColors = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? '#1d4ed8' : '#d97706'));
-  const pointRadii = ordered.map(m => (String(m.source || '').toLowerCase().includes('inbody') ? 7 : 5));
+  const series = buildMonthlyWeightSeries(measurements);
+  if (series.labels.length === 0) return;
 
   const targetMax = Number(profile.targetWeightMax) || 74;
   const targetMin = Number(profile.targetWeightMin) || 72;
-  const allValues = [...dataWeights, targetMax, targetMin].filter(value => value > 0);
+  const allValues = [...series.inbodyData, ...series.homeData, targetMax, targetMin]
+    .filter(value => typeof value === 'number' && value > 0);
   const yMin = allValues.length > 0 ? Math.max(0, Math.floor(Math.min(...allValues) - 2)) : 60;
   const yMax = allValues.length > 0 ? Math.ceil(Math.max(...allValues) + 2) : 100;
+
+  const metaFor = (context) => {
+    if (context.datasetIndex === 0) return series.inbodyMeta[context.dataIndex];
+    if (context.datasetIndex === 1) return series.homeMeta[context.dataIndex];
+    return null;
+  };
 
   if (weightChartInstance) weightChartInstance.destroy();
 
   weightChartInstance = new Chart(canvas, {
-    type: 'line',
+    type: 'bar',
     data: {
-      labels,
+      labels: series.labels,
       datasets: [
         {
-          label: 'Peso registrado (kg)',
-          data: dataWeights,
-          borderColor: 'rgba(245, 158, 11, 0.7)',
-          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: pointRadii,
-          pointHoverRadius: 8,
-          pointBackgroundColor: pointColors,
-          pointBorderColor: pointBorderColors,
-          pointBorderWidth: 2
+          label: 'InBody',
+          data: series.inbodyData,
+          backgroundColor: 'rgba(59, 130, 246, 0.78)',
+          hoverBackgroundColor: 'rgba(59, 130, 246, 0.95)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          borderRadius: 6,
+          borderSkipped: false,
+          maxBarThickness: 36,
+          barPercentage: 0.9,
+          categoryPercentage: 0.72
         },
         {
-          label: `Meta máxima (${targetMax} kg)`,
-          data: labels.map(() => targetMax),
+          label: 'Báscula hogar',
+          data: series.homeData,
+          backgroundColor: 'rgba(245, 158, 11, 0.78)',
+          hoverBackgroundColor: 'rgba(245, 158, 11, 0.95)',
+          borderColor: '#f59e0b',
+          borderWidth: 1,
+          borderRadius: 6,
+          borderSkipped: false,
+          maxBarThickness: 36,
+          barPercentage: 0.9,
+          categoryPercentage: 0.72
+        },
+        {
+          type: 'line',
+          label: 'Meta',
+          data: series.labels.map(() => targetMax),
           borderColor: '#10b981',
-          borderDash: [5, 5],
+          borderDash: [6, 4],
           borderWidth: 1.5,
           pointRadius: 0,
-          fill: false
+          pointHitRadius: 0,
+          fill: false,
+          order: 10
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       scales: {
         y: {
           min: yMin,
           max: yMax,
           grid: { color: gridColor },
-          ticks: { color: textColor }
+          ticks: {
+            color: textColor,
+            font: { size: 10 },
+            callback: (value) => `${value} kg`
+          }
         },
         x: {
           grid: { display: false },
-          ticks: { color: textColor }
+          ticks: {
+            color: textColor,
+            font: { size: 10 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 12
+          }
         }
       },
       plugins: {
-        legend: { labels: { color: textColor, font: { size: 10 } } },
+        // La leyenda se muestra en HTML para no duplicarla.
+        legend: { display: false },
         tooltip: {
           backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
           titleColor: isDark ? '#f8fafc' : '#0f172a',
@@ -741,23 +816,24 @@ function initWeightChart(measurements, profile) {
           borderWidth: 1,
           padding: 10,
           callbacks: {
-            title: (items) => {
-              const idx = items[0]?.dataIndex;
-              const measurement = ordered[idx];
-              return measurement ? `${measurement.date} • ${measurement.source || 'Báscula'}` : '';
-            },
+            title: (items) => items[0]?.label || '',
             label: (context) => {
-              if (context.datasetIndex === 0) {
-                const idx = context.dataIndex;
-                const measurement = ordered[idx];
-                const lines = [`Peso: ${context.parsed.y} kg`];
-                const fat = measurement?.fatPercent || measurement?.bodyFatPercent;
-                if (fat) lines.push(`Grasa corporal: ${fat}%`);
-                if (measurement?.fatFreeMass) lines.push(`Masa libre de grasa: ${measurement.fatFreeMass} kg`);
-                if (measurement?.visceralFat) lines.push(`Grasa visceral: Nivel ${measurement.visceralFat}`);
-                return lines;
-              }
+              if (context.datasetIndex === 2) return `Meta: ${targetMax} kg`;
+              const meta = metaFor(context);
+              if (!meta) return null;
               return `${context.dataset.label}: ${context.parsed.y} kg`;
+            },
+            afterLabel: (context) => {
+              if (context.datasetIndex === 2) return '';
+              const meta = metaFor(context);
+              if (!meta) return '';
+              const lines = [];
+              if (meta.date) lines.push(`Fecha: ${formatDisplayDate(meta.date)}`);
+              const fat = meta.fatPercent ?? meta.bodyFatPercent;
+              if (fat) lines.push(`Grasa: ${fat}%`);
+              if (meta.fatFreeMass) lines.push(`Masa magra: ${meta.fatFreeMass} kg`);
+              if (meta.visceralFat) lines.push(`Visceral: Nivel ${meta.visceralFat}`);
+              return lines;
             }
           }
         }
