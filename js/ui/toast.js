@@ -27,6 +27,7 @@ export function showToast(message, type = 'info', duration = 3500) {
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   toast.className = [
     'pointer-events-auto w-full max-w-md rounded-xl border px-4 py-3 text-xs font-semibold shadow-lg',
+    'break-words [overflow-wrap:anywhere]',
     'opacity-0 translate-y-2 transition-all duration-200',
     TOAST_STYLES[type] || TOAST_STYLES.info
   ].join(' ');
@@ -63,8 +64,8 @@ export function confirmAction({
     overlay.className = 'fixed inset-0 z-[90] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4';
     overlay.innerHTML = `
       <div role="dialog" aria-modal="true" aria-labelledby="kinetixConfirmTitle" class="w-full max-w-sm rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-2xl">
-        <h2 id="kinetixConfirmTitle" class="text-sm font-bold text-[var(--foreground)]"></h2>
-        <p class="mt-2 text-xs leading-relaxed text-[var(--muted-foreground)] whitespace-pre-line"></p>
+        <h2 id="kinetixConfirmTitle" class="text-sm font-bold text-[var(--foreground)] break-words"></h2>
+        <p class="mt-2 text-xs leading-relaxed text-[var(--muted-foreground)] whitespace-pre-line break-words [overflow-wrap:anywhere]"></p>
         <div class="mt-5 flex gap-2">
           <button type="button" data-action="cancel" class="flex-1 rounded-xl border border-[var(--border)] px-3 py-2.5 text-xs font-semibold text-[var(--foreground)] hover:bg-[var(--accent)]"></button>
           <button type="button" data-action="confirm" class="flex-1 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-950"></button>

@@ -80,8 +80,14 @@
     /* iOS hace zoom al enfocar inputs con fuente < 16px; evitarlo sin
        bloquear el zoom del usuario (accesibilidad). */
     @media (max-width: 640px) {
-      input, select, textarea {
+      /* 16px evita el zoom automático de iOS al enfocar campos de texto. */
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+      textarea {
         font-size: 16px !important;
+      }
+      /* Los desplegables no necesitan 16px y se veían demasiado grandes. */
+      select {
+        font-size: 14px !important;
       }
     }
 

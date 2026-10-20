@@ -319,7 +319,7 @@ export function renderAnalyticsModule(container) {
                     ${lean ? `<span>Masa magra: <strong class="text-blue-400">${escapeHtml(lean)} kg</strong></span> •` : ''}
                     ${m.bmr ? `<span>TMB: <strong class="text-[var(--foreground)]">${Math.round(toNumber(m.bmr))} kcal</strong></span>` : ''}
                   </div>
-                  ${m.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1">${escapeHtml(m.notes)}</p>` : ''}
+                  ${m.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1 break-words">${escapeHtml(m.notes)}</p>` : ''}
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
                   <span class="text-[10px] font-bold px-2 py-1 rounded-lg ${isClinic ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--accent)] text-[var(--muted-foreground)]'}">
@@ -411,7 +411,7 @@ export function renderAnalyticsModule(container) {
                             <span class="font-semibold text-[var(--foreground)] text-[11px]">
                               ${isCardioItem ? '🏃 ' : '🏋️ '}${escapeHtml(ex.exerciseName || ex.exerciseId)}
                             </span>
-                            <span class="font-mono text-[11px] text-amber-400 font-bold">
+                            <span class="font-mono text-[11px] text-amber-400 font-bold break-words">
                               ${escapeHtml(setsText || 'Sin series')}
                             </span>
                           </div>

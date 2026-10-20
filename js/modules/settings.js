@@ -82,7 +82,7 @@ export function renderSettingsModule(container) {
           </div>
           <div class="flex justify-between py-1.5">
             <span class="text-[var(--muted-foreground)]">Condición clínica:</span>
-            <span class="font-medium text-[var(--foreground)] text-right">${escapeHtml(profile.condition)}</span>
+            <span class="font-medium text-[var(--foreground)] text-right min-w-0 max-w-[70%] break-words">${escapeHtml(profile.condition)}</span>
           </div>
         </div>
 
@@ -344,7 +344,7 @@ function renderExercisesAnalyticsList(exercises) {
     const safeId = escapeAttr(ex.id);
 
     return `
-      <div class="exercise-card-item bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 rounded-2xl p-3.5 border border-[var(--border)] transition-all" data-routine="${escapeAttr(ex.routineId)}" data-keywords="${escapeAttr(keywords)}">
+      <div class="exercise-card-item bg-[var(--accent)]/30 hover:bg-[var(--accent)]/50 rounded-2xl p-3.5 border border-[var(--border)] transition-all overflow-hidden" data-routine="${escapeAttr(ex.routineId)}" data-keywords="${escapeAttr(keywords)}">
         <div class="flex items-start gap-3">
           <div class="relative shrink-0">
             <img
@@ -360,12 +360,12 @@ function renderExercisesAnalyticsList(exercises) {
           </div>
 
           <div class="flex-1 min-w-0">
-            <div class="flex items-start justify-between gap-1">
-              <div>
+            <div class="flex items-start justify-between gap-1 min-w-0">
+              <div class="min-w-0 flex-1">
                 <h4 class="text-xs font-bold text-[var(--foreground)] truncate">${escapeHtml(ex.name)}</h4>
                 <p class="text-[11px] text-[var(--muted-foreground)] truncate">${escapeHtml(ex.targetMuscles || ex.machineName)}</p>
               </div>
-              <div>${progressBadge}</div>
+              <div class="shrink-0">${progressBadge}</div>
             </div>
 
             <div class="flex items-center gap-3 mt-1.5 text-[10px] text-[var(--muted-foreground)]">
@@ -465,7 +465,7 @@ function renderExerciseHistoryAccordion(stats) {
               <span class="text-[var(--muted-foreground)]">• ${escapeHtml(item.routineName)}</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <span class="text-amber-500 font-mono font-medium">${escapeHtml(setsSummary)}</span>
+              <span class="text-amber-500 font-mono font-medium break-words">${escapeHtml(setsSummary)}</span>
               <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 font-bold text-[10px] border border-amber-500/20">
                 Máx: ${item.bestWeight} kg
               </span>
