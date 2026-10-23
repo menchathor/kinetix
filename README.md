@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.15** — Local-first real, sincronización con merge por `updatedAt`, eliminaciones offline, perfil editable, nutrición interactiva y seguridad por clave compartida.
+> **v1.16** — Local-first real, sincronización con merge por `updatedAt`, eliminaciones offline, perfil editable, nutrición interactiva, borrado de series extra con deshacer y seguridad por clave compartida.
 
 ---
 
@@ -11,7 +11,8 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 ### Entrenamiento
 - Rutina de 4 días (Torso 1, Pierna 1, Torso 2, Pierna 2) con 3 días de descanso activo.
 - 22 máquinas de fuerza + cardio finisher, con infografías en WebP, ajuste de asiento y claves técnicas.
-- Registro de series, peso (kg/placa), reps y **RPE** con botones rápidos `+` / `-`.
+- Registro de series, peso (kg/placa) y reps con botones rápidos `+` / `-`.
+- Las series agregadas por error se pueden eliminar con **Deshacer**; las series base de la rutina quedan protegidas.
 - Referencia automática de la marca anterior y sugerencia de **sobrecarga progresiva** (“Smart Coach”).
 - Historial editable, duración de sesión y borrado con confirmación.
 

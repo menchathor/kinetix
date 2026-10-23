@@ -21,17 +21,22 @@ const TOAST_STYLES = {
   info: 'bg-slate-800 text-slate-100 border-slate-600'
 };
 
-export function showToast(message, type = 'info', duration = 3500) {
+export function showToast(message, type = 'info', duration = 3500, action = null) {
   const container = ensureToastContainer();
   const toast = document.createElement('div');
   toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
   toast.className = [
     'pointer-events-auto w-full max-w-md rounded-xl border px-4 py-3 text-xs font-semibold shadow-lg',
+    'flex items-start gap-3',
     'break-words [overflow-wrap:anywhere]',
     'opacity-0 translate-y-2 transition-all duration-200',
     TOAST_STYLES[type] || TOAST_STYLES.info
   ].join(' ');
-  toast.textContent = String(message ?? '');
+
+  const text = document.createElement('span');
+  text.className = 'min-w-0 flex-1';
+  text.textContent = String(message ?? '');
+  toast.appendChild(text);
 
   container.appendChild(toast);
   requestAnimationFrame(() => {
@@ -47,6 +52,24 @@ export function showToast(message, type = 'info', duration = 3500) {
     clearTimeout(timer);
     remove();
   });
+
+  if (action && action.label && typeof action.onClick === 'function') {
+    const actionButton = document.createElement('button');
+    actionButton.type = 'button';
+    actionButton.className = 'shrink-0 font-bold underline underline-offset-2 hover:opacity-80';
+    actionButton.textContent = action.label;
+    actionButton.addEventListener('click', (event) => {
+      event.stopPropagation();
+      clearTimeout(timer);
+      try {
+        action.onClick();
+      } finally {
+        remove();
+      }
+    });
+    toast.appendChild(actionButton);
+  }
+
   return remove;
 }
 

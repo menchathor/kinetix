@@ -404,7 +404,7 @@ export function renderAnalyticsModule(container) {
                         const isCardioItem = !!ex.isCardio;
                         const setsText = isCardioItem
                           ? `${Number(ex.minutes ?? setsToShow[0]?.weight) || 20} min Zona 2`
-                          : setsToShow.map(s => `${s.weight || 0} kg × ${s.reps || 0}${s.rpe ? ` @${s.rpe}` : ''}`).join(' • ');
+                          : setsToShow.map(s => `${s.weight || 0} kg × ${s.reps || 0}`).join(' • ');
 
                         return `
                           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1.5 px-2.5 rounded-lg bg-[var(--accent)]/40 border border-[var(--border)]/50">

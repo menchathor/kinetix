@@ -439,7 +439,7 @@ function renderExerciseHistoryAccordion(stats) {
   if (!stats.history || stats.history.length === 0) {
     return `
       <div class="p-3 rounded-xl bg-[var(--card)] border border-[var(--border)] text-center text-[11px] text-[var(--muted-foreground)]">
-        No hay registros aún de este ejercicio. Completa series en tu rutina para ver la evolución y RPE aquí.
+        No hay registros aún de este ejercicio. Completa series en tu rutina para ver la evolución aquí.
       </div>
     `;
   }

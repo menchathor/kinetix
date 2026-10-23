@@ -179,6 +179,51 @@ class AppState {
     db.saveActiveSession(this.activeWorkout);
   }
 
+  getExerciseBaseSets(exerciseIndex) {
+    const ex = this.activeWorkout?.exercises?.[exerciseIndex];
+    if (!ex) return 0;
+    const routine = INITIAL_DATA.routines[this.activeWorkout.routineId];
+    const definition = routine?.exercises?.find(item => item.id === ex.exerciseId);
+    // Si no hay definición, no permitimos borrar para no tocar series base.
+    return Number(definition?.defaultSets) || ex.sets?.length || 0;
+  }
+
+  removeSetFromExercise(exerciseIndex, setIndex) {
+    if (!this.activeWorkout) return null;
+    const ex = this.activeWorkout.exercises[exerciseIndex];
+    if (!ex || !Array.isArray(ex.sets) || setIndex < 0 || setIndex >= ex.sets.length) return null;
+
+    // Sólo se eliminan series agregadas por encima de la base del ejercicio.
+    const baseSets = this.getExerciseBaseSets(exerciseIndex);
+    if (setIndex < baseSets) return null;
+
+    const [removed] = ex.sets.splice(setIndex, 1);
+    ex.sets.forEach((set, index) => {
+      set.setNumber = index + 1;
+    });
+    this.activeWorkout.updatedAt = Date.now();
+    db.saveActiveSession(this.activeWorkout);
+    this.notify();
+    return removed;
+  }
+
+  restoreSetFromUndo(exerciseIndex, setIndex, removedSet) {
+    if (!this.activeWorkout || !removedSet) return false;
+    const ex = this.activeWorkout.exercises[exerciseIndex];
+    if (!ex || !Array.isArray(ex.sets)) return false;
+
+    const baseSets = this.getExerciseBaseSets(exerciseIndex);
+    const insertAt = Math.max(baseSets, Math.min(setIndex, ex.sets.length));
+    ex.sets.splice(insertAt, 0, { ...removedSet });
+    ex.sets.forEach((set, index) => {
+      set.setNumber = index + 1;
+    });
+    this.activeWorkout.updatedAt = Date.now();
+    db.saveActiveSession(this.activeWorkout);
+    this.notify();
+    return true;
+  }
+
   addSetToExercise(exerciseIndex) {
     if (!this.activeWorkout) return;
     const ex = this.activeWorkout.exercises[exerciseIndex];

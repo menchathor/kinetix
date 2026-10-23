@@ -151,6 +151,7 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
   const suggestion = db.getProgressiveOverloadSuggestion({ ...def, id: ex.exerciseId });
   const currentSetWeight = Number(ex.sets?.[0]?.weight) || 0;
   const showSuggestion = suggestion && suggestion.shouldUpgrade && currentSetWeight < suggestion.nextWeight;
+  const baseSets = Number(def?.defaultSets) || ex.sets.length;
 
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.exerciseId}">
@@ -241,13 +242,12 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
         <div class="space-y-2">
           <div class="grid grid-cols-12 items-center gap-1 sm:gap-2 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
             <span class="col-span-1 text-center">Serie</span>
-            <span class="col-span-5 sm:col-span-4 text-center">Peso (kg/placa)</span>
-            <span class="col-span-3 sm:col-span-2 text-center">Reps</span>
+            <span class="col-span-5 text-center">Peso (kg/placa)</span>
+            <span class="col-span-3 text-center">Reps</span>
             <span class="col-span-3 text-center">Listo</span>
-            <span class="hidden sm:block sm:col-span-2 text-center">RPE</span>
           </div>
 
-          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
+          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set, setIndex >= baseSets)).join('')}
 
           <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/40 mt-1">
             <button 
@@ -343,7 +343,7 @@ export function renderLiveCardioCard(ex, exIndex, def) {
 }
 
 // 5. Fila interactiva de cada serie
-function renderSetRow(exIndex, setIndex, set) {
+function renderSetRow(exIndex, setIndex, set, canRemove = false) {
   const isDone = !!set.completed;
   return `
     <div class="set-row grid grid-cols-12 items-center gap-1 sm:gap-2 p-1.5 rounded-xl transition-all ${isDone ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-[var(--card)] border border-[var(--border)]'}" data-ex="${exIndex}" data-set="${setIndex}">
@@ -353,7 +353,7 @@ function renderSetRow(exIndex, setIndex, set) {
       </span>
 
       <!-- Peso Input con botones +/- -->
-      <div class="col-span-5 sm:col-span-4 flex items-center justify-center gap-1">
+      <div class="col-span-5 flex items-center justify-center gap-1">
         <button type="button" class="btn-step text-xs px-1 sm:px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5" aria-label="Bajar 2.5 kg">-</button>
         <input
           type="number"
@@ -369,7 +369,7 @@ function renderSetRow(exIndex, setIndex, set) {
       </div>
 
       <!-- Reps Input con botones +/- -->
-      <div class="col-span-3 sm:col-span-2 flex items-center justify-center gap-0.5 sm:gap-1">
+      <div class="col-span-3 flex items-center justify-center gap-0.5 sm:gap-1">
         <button type="button" class="btn-step text-xs px-0.5 sm:px-1 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1" aria-label="Restar una repetición">-</button>
         <input
           type="number"
@@ -383,34 +383,27 @@ function renderSetRow(exIndex, setIndex, set) {
         <button type="button" class="btn-step text-xs px-0.5 sm:px-1 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1" aria-label="Sumar una repetición">+</button>
       </div>
 
-      <!-- Checkbox Completar Serie -->
-      <div class="col-span-3 flex justify-center">
-        <button 
-          type="button" 
-          class="btn-toggle-set w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone 
-            ? 'bg-emerald-500 text-slate-950 shadow-sm' 
+      <!-- Completar serie / eliminar si es una serie agregada -->
+      <div class="col-span-3 flex items-center justify-center gap-0.5 sm:gap-1">
+        <button
+          type="button"
+          class="btn-toggle-set w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone
+            ? 'bg-emerald-500 text-slate-950 shadow-sm'
             : 'bg-[var(--card)] hover:bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)]'}"
-          data-ex="${exIndex}" 
-          data-set="${setIndex}">
-          ${isDone ? '✓' : '○'}
-        </button>
-      </div>
-
-      <!-- RPE opcional: en móvil baja a una segunda línea -->
-      <div class="col-span-12 sm:col-span-2 flex items-center justify-center gap-2 pt-1 sm:pt-0 border-t border-[var(--border)]/40 sm:border-0">
-        <span class="sm:hidden text-[10px] uppercase font-bold text-[var(--muted-foreground)]">RPE</span>
-        <input
-          type="number"
-          step="0.5"
-          min="1"
-          max="10"
-          value="${escapeAttr(set.rpe || '')}"
-          placeholder="RPE"
-          class="input-set-field w-8 sm:w-10 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
           data-ex="${exIndex}"
           data-set="${setIndex}"
-          data-field="rpe"
-          aria-label="RPE percibido de la serie ${set.setNumber}" />
+          aria-label="${isDone ? 'Desmarcar' : 'Marcar'} la serie ${set.setNumber} como completada">
+          ${isDone ? '✓' : '○'}
+        </button>
+        ${canRemove ? `
+          <button
+            type="button"
+            class="btn-remove-set w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-[11px] text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-colors"
+            data-ex="${exIndex}"
+            data-set="${setIndex}"
+            title="Eliminar serie agregada"
+            aria-label="Eliminar la serie ${set.setNumber} agregada">🗑️</button>
+        ` : ''}
       </div>
     </div>
   `;
@@ -419,9 +412,10 @@ function renderSetRow(exIndex, setIndex, set) {
 // 6. Tarjeta compacta para Ejercicio Completado (Al final de la pantalla)
 export function renderCompletedExerciseCard(ex, exIndex, def) {
   const isCardio = !!ex.isCardio || !!def.isCardio;
+  const baseSets = Number(def?.defaultSets) || ex.sets.length;
   const setsSummary = isCardio
     ? `${Number(ex.minutes ?? ex.sets?.[0]?.weight) || 20} min en Zona 2 completados`
-    : ex.sets.map(s => `${s.weight ? `${s.weight}kg` : ''} x ${s.reps}${s.rpe ? ` @RPE ${s.rpe}` : ''}`).join(' • ');
+    : ex.sets.map(s => `${s.weight ? `${s.weight}kg` : ''} x ${s.reps}`).join(' • ');
 
   return `
     <div class="bg-[var(--card)]/75 border border-emerald-500/30 rounded-2xl p-3 shadow-xs transition-all opacity-95" id="card-${ex.exerciseId}">
@@ -464,13 +458,12 @@ export function renderCompletedExerciseCard(ex, exIndex, def) {
         ` : `
           <div class="grid grid-cols-12 items-center gap-1 sm:gap-2 text-[10px] uppercase font-bold text-[var(--muted-foreground)] px-2">
             <span class="col-span-1 text-center">Serie</span>
-            <span class="col-span-5 sm:col-span-4 text-center">Peso</span>
-            <span class="col-span-3 sm:col-span-2 text-center">Reps</span>
+            <span class="col-span-5 text-center">Peso</span>
+            <span class="col-span-3 text-center">Reps</span>
             <span class="col-span-3 text-center">Listo</span>
-            <span class="hidden sm:block sm:col-span-2 text-center">RPE</span>
           </div>
 
-          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set)).join('')}
+          ${ex.sets.map((set, setIndex) => renderSetRow(exIndex, setIndex, set, setIndex >= baseSets)).join('')}
         `}
       </div>
     </div>

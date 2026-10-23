@@ -9,6 +9,8 @@ import { showToast, confirmAction } from '../ui/toast.js';
 import { renderStaticExerciseCard, renderStaticCardioCard, renderLiveExerciseCard, renderLiveCardioCard, renderCompletedExerciseCard, renderWeeklyScheduleSelector, renderRestDayScreen } from './workout-render.js';
 import { getExerciseDefinition, restSeconds } from './workout-utils.js';
 
+let undoToastRemove = null;
+
 export function renderWorkoutModule(container, preserveScroll = false) {
   const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
@@ -466,6 +468,38 @@ function attachWorkoutEvents(container, currentDayId) {
       const exIndex = parseInt(btn.getAttribute('data-ex'));
       state.addSetToExercise(exIndex);
       renderWorkoutModule(container, true);
+    });
+  });
+
+  // Eliminar serie agregada (las series base del ejercicio no se tocan)
+  container.querySelectorAll('.btn-remove-set').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const exIndex = parseInt(btn.getAttribute('data-ex'), 10);
+      const setIndex = parseInt(btn.getAttribute('data-set'), 10);
+      const removed = state.removeSetFromExercise(exIndex, setIndex);
+
+      if (!removed) {
+        showToast('Las series base no se pueden eliminar. Agrega una serie para poder quitarla.', 'warning', 5000);
+        return;
+      }
+
+      if (undoToastRemove) {
+        undoToastRemove();
+        undoToastRemove = null;
+      }
+
+      undoToastRemove = showToast(`Serie ${removed.setNumber} eliminada.`, 'info', 6000, {
+        label: 'Deshacer',
+        onClick: () => {
+          const restored = state.restoreSetFromUndo(exIndex, setIndex, removed);
+          undoToastRemove = null;
+          showToast(
+            restored ? 'Serie restaurada.' : 'No se pudo restaurar la serie.',
+            restored ? 'success' : 'warning',
+            2500
+          );
+        }
+      });
     });
   });
 }

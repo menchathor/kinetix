@@ -25,7 +25,7 @@ export default defineSchema({
             weight: v.any(), // puede ser número, string o "Zona 2"
             reps: v.any(),   // puede ser número o "20 min"
             completed: v.boolean(),
-            rpe: v.optional(v.string()),
+            rpe: v.optional(v.string()), // heredado: la UI ya no lo captura
           })
         ),
         notes: v.optional(v.string()),
