@@ -79,7 +79,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
               </span>
               <div>
-                <h3 class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${escapeHtml(routine.name)}</h3>
+                <p class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${escapeHtml(routine.name)}</p>
                 <p class="text-xs text-[var(--muted-foreground)]">${escapeHtml(routine.dayName)} • Sesión 18:00 hrs</p>
               </div>
             </div>
@@ -434,14 +434,14 @@ function attachWorkoutEvents(container, currentDayId) {
         btn.textContent = willBeCompleted ? '✓' : '○';
         const row = btn.closest('.set-row');
         if (willBeCompleted) {
-          btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm');
+          btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500');
           btn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
           if (row) {
             row.classList.add('bg-emerald-500/10', 'border-emerald-500/20');
             row.classList.remove('bg-[var(--card)]');
           }
         } else {
-          btn.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-sm');
+          btn.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500');
           btn.classList.add('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
           if (row) {
             row.classList.remove('bg-emerald-500/10', 'border-emerald-500/20');

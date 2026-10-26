@@ -77,6 +77,18 @@
       user-select: text;
     }
 
+    /* Los steppers de series usan sus propios botones +/-; ocultamos los
+       spinners nativos para ganar ancho para los decimales. */
+    .input-set-field::-webkit-outer-spin-button,
+    .input-set-field::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .input-set-field {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
     /* iOS hace zoom al enfocar inputs con fuente < 16px; evitarlo sin
        bloquear el zoom del usuario (accesibilidad). */
     @media (max-width: 640px) {
