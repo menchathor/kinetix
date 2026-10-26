@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (offline real, sin CDNs en runtime)
-const CACHE_NAME = 'kinetix-v1.16';
+const CACHE_NAME = 'kinetix-v1.17';
 const CACHE_PREFIX = 'kinetix-';
 
 const CODE_ASSETS = [

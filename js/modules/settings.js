@@ -166,17 +166,20 @@ export function renderSettingsModule(container) {
           Administra el peso base objetivo para tus próximos entrenamientos y revisa tus logros de sobrecarga progresiva.
         </p>
 
-        <div class="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none text-[11px]" id="exerciseFilterTabs">
-          <button data-filter="all" class="filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0">Todos (${exercisesAnalytics.length})</button>
-          <button data-filter="torso1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🏋️ Torso 1</button>
-          <button data-filter="pierna1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🦵 Pierna 1</button>
-          <button data-filter="torso2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">💪 Torso 2</button>
-          <button data-filter="pierna2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🔥 Pierna 2</button>
+        <div class="relative">
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-2 pr-6 scrollbar-none text-[11px]" id="exerciseFilterTabs">
+            <button data-filter="all" class="filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0">Todos (${exercisesAnalytics.length})</button>
+            <button data-filter="torso1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🏋️ Torso 1</button>
+            <button data-filter="pierna1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🦵 Pierna 1</button>
+            <button data-filter="torso2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">💪 Torso 2</button>
+            <button data-filter="pierna2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🔥 Pierna 2</button>
+          </div>
+          <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[var(--card)] to-transparent sm:hidden" aria-hidden="true"></div>
         </div>
 
         <div class="relative my-2.5">
           <input type="text" id="inputSearchExercise" placeholder="Buscar por ejercicio o músculo..." class="w-full text-xs py-2 pl-8 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors" />
-          <span class="absolute left-2.5 top-2.5 text-xs text-[var(--muted-foreground)]" aria-hidden="true">🔍</span>
+          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted-foreground)]" aria-hidden="true">🔍</span>
         </div>
 
         <div class="space-y-3 mt-3" id="exerciseAnalyticsList">

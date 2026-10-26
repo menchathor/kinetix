@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.16** — Local-first real, sincronización con merge por `updatedAt`, eliminaciones offline, perfil editable, nutrición interactiva, borrado de series extra con deshacer y seguridad por clave compartida.
+> **v1.17** — Tema claro por defecto con modo oscuro opcional, tipografía móvil más legible, controles homogéneos, steppers de series con iconos SVG, borrado de series extra con deshacer y sincronización local-first segura.
 
 ---
 
@@ -11,10 +11,15 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 ### Entrenamiento
 - Rutina de 4 días (Torso 1, Pierna 1, Torso 2, Pierna 2) con 3 días de descanso activo.
 - 22 máquinas de fuerza + cardio finisher, con infografías en WebP, ajuste de asiento y claves técnicas.
-- Registro de series, peso (kg/placa) y reps con botones rápidos `+` / `-`.
+- Registro de series, peso (kg/placa) y reps con steppers simétricos y botones `+` / `-` de tamaño consistente.
 - Las series agregadas por error se pueden eliminar con **Deshacer**; las series base de la rutina quedan protegidas.
 - Referencia automática de la marca anterior y sugerencia de **sobrecarga progresiva** (“Smart Coach”).
 - Historial editable, duración de sesión y borrado con confirmación.
+
+### Interfaz
+- **Tema claro por defecto** y modo oscuro opcional desde Ajustes.
+- Etiquetas móviles con un mínimo de 11 px y campos de formulario con altura consistente.
+- Iconos SVG en las acciones de las series (menos, más, check, papelera).
 
 ### Descanso
 - Temporizador flotante con presets, `+15 s`, pausa y barra de progreso.

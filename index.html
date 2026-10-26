@@ -1,30 +1,34 @@
 <!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="Kinetix: entrenamiento de fuerza, nutrición y evolución corporal, local-first y offline.">
   <title>Kinetix • Entrenamiento & Recomposición</title>
 
-  <!-- Aplicar el tema antes del primer paint para evitar flash claro/oscuro -->
-  <script>
-    (function () {
-      try {
-        var theme = localStorage.getItem('kinetix_theme') || localStorage.getItem('smartfit_theme') || 'dark';
-        document.documentElement.classList.toggle('dark', theme !== 'light');
-      } catch (e) {}
-    })();
-  </script>
-
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#090d16">
-  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#f8fafc">
+  <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Kinetix">
   <link rel="icon" type="image/png" href="./assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="./assets/icons/icon-192.png">
+
+  <!-- Aplicar el tema antes del primer paint para evitar flash claro/oscuro.
+       El tema claro es el predeterminado; si hay una preferencia guardada, gana. -->
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('kinetix_theme') || localStorage.getItem('smartfit_theme') || 'light';
+        var isDark = theme === 'dark';
+        document.documentElement.classList.toggle('dark', isDark);
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', isDark ? '#090d16' : '#f8fafc');
+      } catch (e) {}
+    })();
+  </script>
 
   <!-- CSS compilado localmente (sin CDN en producción) -->
   <link rel="stylesheet" href="./assets/css/tailwind.css">
@@ -40,12 +44,29 @@
       --border: #e2e8f0;
       --accent: #f1f5f9;
       --foreground: #0f172a;
-      --muted-foreground: #64748b;
+      --muted-foreground: #475569;
       --primary: #f59e0b;
       --primary-foreground: #020617;
       --header-bg: rgba(248, 250, 252, 0.92);
       --nav-bg: rgba(255, 255, 255, 0.95);
     }
+
+    /* Tema claro: los acentos 400/500 no alcanzan 4.5:1 sobre fondos
+       claros; usamos tonos 600/700 sólo cuando el tema claro está activo. */
+    html:not(.dark) .text-amber-400,
+    html:not(.dark) .text-amber-500 { color: #92400e !important; }
+    html:not(.dark) .text-emerald-400,
+    html:not(.dark) .text-emerald-500 { color: #047857 !important; }
+    html:not(.dark) .text-blue-400,
+    html:not(.dark) .text-blue-500 { color: #1d4ed8 !important; }
+    html:not(.dark) .text-rose-400,
+    html:not(.dark) .text-rose-500 { color: #be123c !important; }
+    html:not(.dark) .text-purple-400,
+    html:not(.dark) .text-purple-500 { color: #7e22ce !important; }
+    html:not(.dark) .text-teal-400,
+    html:not(.dark) .text-teal-500 { color: #0f766e !important; }
+    html:not(.dark) .text-cyan-400,
+    html:not(.dark) .text-cyan-500 { color: #0e7490 !important; }
 
     html.dark {
       --background: #090d16;
@@ -95,10 +116,31 @@
       /* Campos compactos en móvil. La especificidad gana a text-xs sin
          necesidad de !important. En iOS esto puede activar el zoom al
          enfocar; si ocurre, se puede subir sólo ese caso a 16px. */
-      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field),
       select:not([multiple]),
       textarea:not([disabled]) {
         font-size: 12px;
+        min-height: 2.25rem;
+      }
+
+      /* Los steppers de la fila de series tienen su propia altura. */
+      .input-set-field {
+        min-height: 0;
+      }
+
+      /* Piso de legibilidad: las etiquetas de 9/10px suben a 11px. */
+      .text-\[9px\],
+      .text-\[10px\] {
+        font-size: 11px !important;
+        line-height: 1.25;
+      }
+    }
+
+    @media (min-width: 360px) and (max-width: 640px) {
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field),
+      select:not([multiple]),
+      textarea:not([disabled]) {
+        min-height: 2.5rem;
       }
     }
 
@@ -127,7 +169,7 @@
           <h1 class="text-sm font-extrabold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
             <span id="appTitleHeader">Kinetix</span>
             <span id="headerGymTime" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
-            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.16</span>
+            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.17</span>
           </h1>
           <p id="headerSubtitle" class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
         </div>
@@ -210,6 +252,6 @@
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.16"></script>
+  <script type="module" src="./js/app.js?v=1.17"></script>
 </body>
 </html>

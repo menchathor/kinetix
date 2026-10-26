@@ -74,7 +74,7 @@ class App {
 
   initTheme() {
     const savedTheme = db.getTheme();
-    const isDark = savedTheme !== 'light';
+    const isDark = savedTheme === 'dark';
     document.documentElement.classList.toggle('dark', isDark);
     this.updateThemeMeta(isDark);
     this.updateThemeIcon(isDark);

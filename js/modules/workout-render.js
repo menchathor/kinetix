@@ -5,6 +5,16 @@ import { db } from '../services/db.js';
 import { escapeHtml, escapeAttr, safeUrl } from '../utils/escape.js';
 import { restSeconds } from './workout-utils.js';
 
+// Iconos de línea para los controles de la fila de series. Evitan las
+// diferencias de renderizado de emojis entre Android/iOS/escritorio.
+const ROW_ICONS = {
+  minus: '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M12 5v14M5 12h14"/></svg>',
+  check: '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m5 12 4 4L19 6"/></svg>',
+  circle: '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="7"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 7h16M9 7V5h6v2M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>'
+};
+
 // 1. Tarjeta de Ejercicio de Fuerza en Modo Previa
 export function renderStaticExerciseCard(ex, exIndex, prevLog) {
   const customWeight = db.getCustomWeight(ex.id);
@@ -349,13 +359,13 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
     <div class="set-row p-1.5 rounded-xl transition-all ${isDone ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-[var(--card)] border border-[var(--border)]'}" data-ex="${exIndex}" data-set="${setIndex}">
       <div class="flex items-center gap-0.5 xs:gap-1">
         <!-- Serie # -->
-        <span class="w-7 h-7 xs:w-9 xs:h-9 shrink-0 rounded-lg bg-[var(--accent)] border border-[var(--border)] flex items-center justify-center text-xs font-mono font-bold text-[var(--muted-foreground)]">
+        <span class="w-7 h-8 xs:w-9 xs:h-10 shrink-0 rounded-lg bg-[var(--accent)] border border-[var(--border)] flex items-center justify-center text-xs font-mono font-bold text-[var(--muted-foreground)]">
           ${set.setNumber}
         </span>
 
         <!-- Peso: stepper con el mismo alto y estructura que reps -->
-        <div class="flex-1 min-w-0 h-7 xs:h-9 flex items-stretch rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden focus-within:border-amber-500 transition-colors">
-          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-r border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5" aria-label="Bajar 2.5 kg">−</button>
+        <div class="flex-1 min-w-0 h-8 xs:h-10 flex items-stretch rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden focus-within:border-amber-500 transition-colors">
+          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-r border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5" aria-label="Bajar 2.5 kg">${ROW_ICONS.minus}</button>
           <input
             type="number"
             step="any"
@@ -366,12 +376,12 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
             data-set="${setIndex}"
             data-field="weight"
             aria-label="Peso en kg de la serie ${set.setNumber}" />
-          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-l border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5" aria-label="Subir 2.5 kg">+</button>
+          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-l border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5" aria-label="Subir 2.5 kg">${ROW_ICONS.plus}</button>
         </div>
 
         <!-- Reps: mismo ancho de grupo, alto y estilo que peso -->
-        <div class="flex-1 min-w-0 h-7 xs:h-9 flex items-stretch rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden focus-within:border-amber-500 transition-colors">
-          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-r border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1" aria-label="Restar una repetición">−</button>
+        <div class="flex-1 min-w-0 h-8 xs:h-10 flex items-stretch rounded-lg border border-[var(--border)] bg-[var(--card)] overflow-hidden focus-within:border-amber-500 transition-colors">
+          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-r border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1" aria-label="Restar una repetición">${ROW_ICONS.minus}</button>
           <input
             type="number"
             value="${escapeAttr(set.reps)}"
@@ -381,19 +391,19 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
             data-set="${setIndex}"
             data-field="reps"
             aria-label="Repeticiones de la serie ${set.setNumber}" />
-          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-l border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1" aria-label="Sumar una repetición">+</button>
+          <button type="button" class="btn-step w-6 xs:w-7 h-full shrink-0 flex items-center justify-center text-xs font-bold bg-[var(--accent)] hover:bg-[var(--border)] active:bg-[var(--border)] text-[var(--foreground)] border-l border-[var(--border)] select-none" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1" aria-label="Sumar una repetición">${ROW_ICONS.plus}</button>
         </div>
 
         <!-- Listo -->
         <button
           type="button"
-          class="btn-toggle-set w-7 h-7 xs:w-9 xs:h-9 shrink-0 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone
+          class="btn-toggle-set w-7 h-8 xs:w-9 xs:h-10 shrink-0 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone
             ? 'bg-emerald-500 text-slate-950 border border-emerald-500 shadow-sm'
             : 'bg-[var(--card)] hover:bg-[var(--accent)] text-[var(--muted-foreground)] border border-[var(--border)]'}"
           data-ex="${exIndex}"
           data-set="${setIndex}"
           aria-label="${isDone ? 'Desmarcar' : 'Marcar'} la serie ${set.setNumber} como completada">
-          ${isDone ? '✓' : '○'}
+          ${isDone ? ROW_ICONS.check : ROW_ICONS.circle}
         </button>
       </div>
 
@@ -401,10 +411,10 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
         <div class="mt-1 flex justify-end">
           <button
             type="button"
-            class="btn-remove-set text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded-md hover:bg-rose-500/10 transition-colors"
+            class="btn-remove-set inline-flex items-center gap-1 text-[10px] font-bold text-rose-400 hover:text-rose-300 px-2 py-0.5 rounded-md hover:bg-rose-500/10 transition-colors"
             data-ex="${exIndex}"
             data-set="${setIndex}"
-            title="Eliminar serie agregada">🗑️ Eliminar serie ${set.setNumber}</button>
+            title="Eliminar serie agregada">${ROW_ICONS.trash}<span>Eliminar serie ${set.setNumber}</span></button>
         </div>
       ` : ''}
     </div>

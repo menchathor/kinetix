@@ -1,6 +1,6 @@
 {
   "name": "kinetix",
-  "version": "1.16.0",
+  "version": "1.17.0",
   "private": true,
   "description": "PWA local-first para entrenamiento de fuerza, nutrición, descanso activo y evolución corporal.",
   "main": "index.html",

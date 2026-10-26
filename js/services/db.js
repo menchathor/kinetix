@@ -487,7 +487,7 @@ export class StorageService {
   }
 
   getTheme() {
-    return localStorage.getItem(KEYS.THEME) || 'dark';
+    return localStorage.getItem(KEYS.THEME) || 'light';
   }
 
   setTheme(theme) {
