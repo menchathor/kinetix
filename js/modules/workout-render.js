@@ -354,7 +354,7 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
 
       <!-- Peso Input con botones +/- -->
       <div class="col-span-5 flex items-center justify-center gap-1">
-        <button type="button" class="btn-step text-xs px-1 sm:px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5" aria-label="Bajar 2.5 kg">-</button>
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="-2.5" aria-label="Bajar 2.5 kg">-</button>
         <input
           type="number"
           step="any"
@@ -365,26 +365,26 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
           data-set="${setIndex}"
           data-field="weight"
           aria-label="Peso en kg de la serie ${set.setNumber}" />
-        <button type="button" class="btn-step text-xs px-1 sm:px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5" aria-label="Subir 2.5 kg">+</button>
+        <button type="button" class="btn-step text-xs px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="weight" data-delta="2.5" aria-label="Subir 2.5 kg">+</button>
       </div>
 
       <!-- Reps Input con botones +/- -->
-      <div class="col-span-3 flex items-center justify-center gap-0.5 sm:gap-1">
-        <button type="button" class="btn-step text-xs px-0.5 sm:px-1 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1" aria-label="Restar una repetición">-</button>
+      <div class="col-span-3 flex items-center justify-center gap-0 sm:gap-1">
+        <button type="button" class="btn-step text-xs px-1 xs:px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="-1" aria-label="Restar una repetición">-</button>
         <input
           type="number"
           value="${escapeAttr(set.reps)}"
           placeholder="Reps"
-          class="input-set-field w-7 sm:w-9 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
+          class="input-set-field w-[26px] sm:w-9 text-center font-mono text-xs font-bold py-1 rounded-lg bg-transparent border border-[var(--border)] focus:border-amber-500 outline-none text-[var(--foreground)]"
           data-ex="${exIndex}"
           data-set="${setIndex}"
           data-field="reps"
           aria-label="Repeticiones de la serie ${set.setNumber}" />
-        <button type="button" class="btn-step text-xs px-0.5 sm:px-1 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1" aria-label="Sumar una repetición">+</button>
+        <button type="button" class="btn-step text-xs px-1 xs:px-1.5 py-0.5 rounded bg-[var(--accent)] hover:bg-[var(--border)] select-none text-[var(--foreground)]" data-ex="${exIndex}" data-set="${setIndex}" data-field="reps" data-delta="1" aria-label="Sumar una repetición">+</button>
       </div>
 
       <!-- Completar serie / eliminar si es una serie agregada -->
-      <div class="col-span-3 flex items-center justify-center gap-0.5 sm:gap-1">
+      <div class="col-span-3 flex items-center justify-center gap-0 sm:gap-1">
         <button
           type="button"
           class="btn-toggle-set w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all ${isDone
