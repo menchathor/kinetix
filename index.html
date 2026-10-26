@@ -30,6 +30,11 @@
     })();
   </script>
 
+  <!-- Tipografía autoalojada: Barlow / Barlow Condensed (offline). -->
+  <link rel="preload" href="./assets/fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="./assets/fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="./assets/css/fonts.css">
+
   <!-- CSS compilado localmente (sin CDN en producción) -->
   <link rel="stylesheet" href="./assets/css/tailwind.css">
 
@@ -49,24 +54,23 @@
       --primary-foreground: #020617;
       --header-bg: rgba(248, 250, 252, 0.92);
       --nav-bg: rgba(255, 255, 255, 0.95);
-    }
 
-    /* Tema claro: los acentos 400/500 no alcanzan 4.5:1 sobre fondos
-       claros; usamos tonos 600/700 sólo cuando el tema claro está activo. */
-    html:not(.dark) .text-amber-400,
-    html:not(.dark) .text-amber-500 { color: #92400e !important; }
-    html:not(.dark) .text-emerald-400,
-    html:not(.dark) .text-emerald-500 { color: #047857 !important; }
-    html:not(.dark) .text-blue-400,
-    html:not(.dark) .text-blue-500 { color: #1d4ed8 !important; }
-    html:not(.dark) .text-rose-400,
-    html:not(.dark) .text-rose-500 { color: #be123c !important; }
-    html:not(.dark) .text-purple-400,
-    html:not(.dark) .text-purple-500 { color: #7e22ce !important; }
-    html:not(.dark) .text-teal-400,
-    html:not(.dark) .text-teal-500 { color: #0f766e !important; }
-    html:not(.dark) .text-cyan-400,
-    html:not(.dark) .text-cyan-500 { color: #0e7490 !important; }
+      /* Tokens semánticos de texto y foco (WCAG AA en cada tema). */
+      --accent-text: #92400e;
+      --success-text: #047857;
+      --danger-text: #be123c;
+      --info-text: #1d4ed8;
+      --violet-text: #6d28d9;
+      --teal-text: #0f766e;
+      --cyan-text: #0e7490;
+      --focus-ring: #b45309;
+
+      /* Escala única de controles y separación táctil. */
+      --control-sm: 2.25rem;
+      --control-md: 2.5rem;
+      --control-touch: 2.75rem;
+      --gap-touch: 0.5rem;
+    }
 
     html.dark {
       --background: #090d16;
@@ -80,13 +84,33 @@
       --primary-foreground: #020617;
       --header-bg: rgba(9, 13, 22, 0.90);
       --nav-bg: rgba(9, 13, 22, 0.95);
+
+      --accent-text: #fbbf24;
+      --success-text: #34d399;
+      --danger-text: #fb7185;
+      --info-text: #60a5fa;
+      --violet-text: #c084fc;
+      --teal-text: #2dd4bf;
+      --cyan-text: #22d3ee;
+      --focus-ring: #fbbf24;
     }
 
     body {
       background-color: var(--background);
       color: var(--foreground);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Barlow', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Identidad deportiva: condensada sólo en títulos, nunca en lectura larga. */
+    h1, h2, h3, .font-display {
+      font-family: 'Barlow Condensed', 'Barlow', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0.01em;
+    }
+
+    /* Cifras alineadas en tablas y contadores. */
+    .tnum, .font-mono {
+      font-variant-numeric: tabular-nums;
     }
 
     /* Permitir seleccionar y copiar texto (notas, comidas, etc.) */
@@ -110,43 +134,70 @@
       appearance: textfield;
     }
 
-    /* iOS hace zoom al enfocar inputs con fuente < 16px; evitarlo sin
-       bloquear el zoom del usuario (accesibilidad). */
+    /* Todos los controles comparten 44 px de alto. Los steppers de serie
+       gestionan su propia altura dentro de su grupo. */
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field):not([type="file"]),
+    select:not([multiple]),
+    textarea:not([disabled]) {
+      min-height: var(--control-touch);
+    }
+
+    /* En iOS, 16 px evita el zoom automático al enfocar un campo. */
     @media (max-width: 640px) {
-      /* Campos compactos en móvil. La especificidad gana a text-xs sin
-         necesidad de !important. En iOS esto puede activar el zoom al
-         enfocar; si ocurre, se puede subir sólo ese caso a 16px. */
-      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field),
+      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field):not([type="file"]),
       select:not([multiple]),
       textarea:not([disabled]) {
-        font-size: 12px;
-        min-height: 2.25rem;
+        font-size: 16px;
       }
 
-      /* Los steppers de la fila de series tienen su propia altura. */
       .input-set-field {
-        min-height: 0;
-      }
-
-      /* Piso de legibilidad: las etiquetas de 9/10px suben a 11px. */
-      .text-\[9px\],
-      .text-\[10px\] {
-        font-size: 11px !important;
-        line-height: 1.25;
+        font-size: 13px;
       }
     }
 
-    @media (min-width: 360px) and (max-width: 640px) {
-      input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-set-field),
-      select:not([multiple]),
-      textarea:not([disabled]) {
-        min-height: 2.5rem;
-      }
+    /* Piso de legibilidad: ninguna etiqueta baja de 11 px. */
+    .text-\[9px\],
+    .text-\[10px\] {
+      font-size: 11px;
+      line-height: 1.25;
     }
 
-    /* Safe area padding for iPhones with notch / home bar */
+    /* Safe areas iOS (notch, Dynamic Island y barra inferior). */
+    .safe-top {
+      padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    }
     .safe-bottom {
-      padding-bottom: max(env(safe-area-inset-bottom, 16px), 16px);
+      padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem);
+    }
+    .safe-main-bottom {
+      padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+    }
+    .floating-timer-offset {
+      bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Micro-interacciones breves y con significado. */
+    @keyframes check-pop {
+      0% { transform: scale(0.82); }
+      60% { transform: scale(1.1); }
+      100% { transform: scale(1); }
+    }
+    .check-pop {
+      animation: check-pop 180ms ease-out;
+    }
+    @keyframes soft-in {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .soft-in {
+      animation: soft-in 180ms ease-out;
+    }
+
+    .nav-tab-btn .nav-icon {
+      transition: transform 120ms ease-out;
+    }
+    .nav-tab-btn:active .nav-icon {
+      transform: scale(0.9);
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -161,26 +212,30 @@
 <body class="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col antialiased transition-colors duration-200">
 
   <!-- TOP APP BAR -->
-  <header class="sticky top-0 z-40 bg-[var(--header-bg)] backdrop-blur-md border-b border-[var(--border)] px-4 py-3 transition-colors duration-200">
-    <div class="max-w-3xl mx-auto flex items-center justify-between">
-      <div class="flex items-center gap-2.5">
-        <img src="./assets/icons/icon-192.png" alt="Kinetix Logo" class="w-8 h-8 rounded-xl border border-[var(--border)] shadow-xs object-cover" />
-        <div>
-          <h1 class="text-sm font-extrabold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
+  <header class="safe-top sticky top-0 z-40 bg-[var(--header-bg)] backdrop-blur-md border-b border-[var(--border)] px-4 pb-3 transition-colors duration-200">
+    <div class="max-w-3xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <img src="./assets/icons/icon-192.png" alt="Kinetix Logo" class="w-8 h-8 rounded-xl border border-[var(--border)] shadow-xs object-cover shrink-0" />
+        <div class="min-w-0">
+          <h1 class="text-base font-bold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
             <span id="appTitleHeader">Kinetix</span>
-            <span id="headerGymTime" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
-            <span id="headerVersionBadge" class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.17</span>
+            <span id="headerGymTime" class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
+            <span id="headerVersionBadge" class="hidden xs:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.18</span>
           </h1>
-          <p id="headerSubtitle" class="text-[10px] text-[var(--muted-foreground)]">Recomposición Corporal • 72-74 kg</p>
+          <p id="headerSubtitle" class="text-[11px] text-[var(--muted-foreground)] truncate">Recomposición Corporal • 72-74 kg</p>
         </div>
       </div>
 
-      <!-- Action Buttons: Theme Toggle & Avatar -->
-      <div class="flex items-center gap-2">
-        <button id="btnThemeToggle" class="w-8 h-8 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center text-sm shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro" aria-label="Cambiar entre modo claro y oscuro">
-          <span id="themeIcon" aria-hidden="true">☀️</span>
+      <!-- Acciones: estado de sync, tema y avatar -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="headerSyncStatus" type="button" class="relative w-11 h-11 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center shadow-xs hover:bg-[var(--border)] transition-colors" title="Estado de sincronización" aria-label="Estado de sincronización: en línea">
+          <span id="headerSyncIcon" data-icon="cloud" aria-hidden="true"></span>
+          <span id="headerSyncDot" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[var(--accent)]" aria-hidden="true"></span>
         </button>
-        <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-black text-xs flex items-center justify-center shadow-xs">
+        <button id="btnThemeToggle" class="w-11 h-11 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro" aria-label="Cambiar entre modo claro y oscuro">
+          <span id="themeIcon" data-icon="moon" aria-hidden="true"></span>
+        </button>
+        <div class="hidden xs:flex w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-extrabold text-xs items-center justify-center shadow-xs" aria-hidden="true">
           MM
         </div>
       </div>
@@ -188,13 +243,13 @@
   </header>
 
   <!-- MAIN SCROLLABLE CONTENT (Montado dinámicamente por app.js) -->
-  <main id="mainContent" class="flex-1 p-4 pb-28 max-w-3xl mx-auto w-full">
+  <main id="mainContent" class="flex-1 p-4 pb-28 safe-main-bottom max-w-3xl mx-auto w-full">
     <!-- Contenido SPA inyectado por JS -->
   </main>
 
   <!-- TEMPORIZADOR DE DESCANSO FLOTANTE -->
-  <div id="floatingTimer" class="hidden fixed bottom-20 right-4 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-3 shadow-2xl max-w-xs w-64 transition-all">
-    <div class="flex items-center justify-between mb-1.5">
+  <div id="floatingTimer" class="hidden fixed floating-timer-offset right-4 z-50 bg-[var(--card)]/95 backdrop-blur-md border border-amber-500/40 rounded-2xl p-3 shadow-2xl max-w-xs w-64 transition-all">
+    <div class="flex items-center justify-between gap-2 mb-1.5">
       <div class="flex items-center gap-1.5">
         <span class="relative flex h-2.5 w-2.5">
           <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
@@ -203,9 +258,13 @@
         <span class="text-[11px] uppercase font-bold text-amber-500">Descanso</span>
       </div>
       <div class="flex items-center gap-1">
-        <button id="btnTimerAdd15" class="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos" aria-label="Sumar 15 segundos al descanso">+15s</button>
-        <button id="btnTimerTogglePlay" class="text-xs px-2 py-0.5 rounded bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" aria-label="Pausar o reanudar el descanso">⏸</button>
-        <button id="btnTimerClose" class="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)] pl-1" aria-label="Cerrar el temporizador">✕</button>
+        <button id="btnTimerAdd15" class="text-[11px] font-mono font-bold h-11 min-w-11 px-2 rounded-lg bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos" aria-label="Sumar 15 segundos al descanso">+15s</button>
+        <button id="btnTimerTogglePlay" class="w-11 h-11 rounded-lg bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center" aria-label="Pausar o reanudar el descanso">
+          <span data-icon="pause" aria-hidden="true"></span>
+        </button>
+        <button id="btnTimerClose" class="w-11 h-11 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center" aria-label="Cerrar el temporizador">
+          <span data-icon="x" aria-hidden="true"></span>
+        </button>
       </div>
     </div>
 
@@ -223,35 +282,35 @@
   <!-- BOTTOM NAVIGATION BAR (Sticky) -->
   <nav aria-label="Navegación principal" class="fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-lg border-t border-[var(--border)] safe-bottom transition-colors duration-200">
     <div class="max-w-md mx-auto grid grid-cols-4 px-2 py-1">
-      
+
       <!-- Pestaña 1: Rutina / Entrenamiento -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-amber-500 transition-all" data-tab="workout">
-        <span class="nav-icon text-lg">🏋️</span>
-        <span class="nav-label text-[10px] font-bold mt-0.5">Rutina</span>
+      <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-amber-500 transition-all" data-tab="workout">
+        <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="dumbbell" aria-hidden="true"></span>
+        <span class="nav-label text-[11px] font-bold mt-1">Rutina</span>
       </button>
 
       <!-- Pestaña 2: Nutrición -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="nutrition">
-        <span class="nav-icon text-lg">🥗</span>
-        <span class="nav-label text-[10px] mt-0.5">Nutrición</span>
+      <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="nutrition">
+        <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="salad" aria-hidden="true"></span>
+        <span class="nav-label text-[11px] mt-1">Nutrición</span>
       </button>
 
       <!-- Pestaña 3: Evolución -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="analytics">
-        <span class="nav-icon text-lg">📈</span>
-        <span class="nav-label text-[10px] mt-0.5">Evolución</span>
+      <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="analytics">
+        <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="chart-line" aria-hidden="true"></span>
+        <span class="nav-label text-[11px] mt-1">Evolución</span>
       </button>
 
       <!-- Pestaña 4: Ajustes -->
-      <button class="nav-tab-btn flex flex-col items-center justify-center py-1 text-[var(--muted-foreground)] transition-all" data-tab="settings">
-        <span class="nav-icon text-lg">⚙️</span>
-        <span class="nav-label text-[10px] mt-0.5">Ajustes</span>
+      <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="settings">
+        <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="settings" aria-hidden="true"></span>
+        <span class="nav-label text-[11px] mt-1">Ajustes</span>
       </button>
 
     </div>
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.17"></script>
+  <script type="module" src="./js/app.js?v=1.18"></script>
 </body>
 </html>

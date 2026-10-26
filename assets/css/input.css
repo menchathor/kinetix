@@ -24,6 +24,36 @@
   .border-\[var\(--border\)\]\/60 { border-color: var(--border); border-color: color-mix(in srgb, var(--border) 60%, transparent); }
   .text-\[var\(--foreground\)\]\/90 { color: var(--foreground); color: color-mix(in srgb, var(--foreground) 90%, transparent); }
 
+  /* Tokens semánticos: las utilidades de color de texto conservan su nombre
+     histórico, pero el tono cambia por tema para garantizar 4.5:1. */
+  .text-amber-300,
+  .text-amber-400,
+  .text-amber-500 { color: var(--accent-text); }
+  .text-emerald-300,
+  .text-emerald-400,
+  .text-emerald-500 { color: var(--success-text); }
+  .text-rose-300,
+  .text-rose-400,
+  .text-rose-500 { color: var(--danger-text); }
+  .text-blue-300,
+  .text-blue-400,
+  .text-blue-500 { color: var(--info-text); }
+  .text-purple-300,
+  .text-purple-400,
+  .text-purple-500 { color: var(--violet-text); }
+  .text-teal-300,
+  .text-teal-400,
+  .text-teal-500 { color: var(--teal-text); }
+  .text-cyan-300,
+  .text-cyan-400,
+  .text-cyan-500 { color: var(--cyan-text); }
+
+  /* Escala táctil compartida. */
+  .btn-touch {
+    min-height: var(--control-touch);
+    min-width: var(--control-touch);
+  }
+
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -39,9 +69,17 @@
     -webkit-text-size-adjust: 100%;
   }
 
-  /* Evita que el foco del teclado quede invisible. */
+  /* Foco visible y con contraste en ambos temas. */
   :focus-visible {
-    outline: 2px solid #f59e0b;
+    outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+
+  /* Flechas nativas de acordeón como SVG (sin emojis). */
+  details > summary {
+    list-style: none;
+  }
+  details > summary::-webkit-details-marker {
+    display: none;
   }
 }

@@ -5,16 +5,85 @@ import { db } from '../services/db.js';
 import { timer } from '../services/timer.js';
 import { escapeHtml } from '../utils/escape.js';
 import { showToast, confirmAction } from '../ui/toast.js';
+import { icon } from '../ui/icons.js';
 
 import { renderStaticExerciseCard, renderStaticCardioCard, renderLiveExerciseCard, renderLiveCardioCard, renderCompletedExerciseCard, renderWeeklyScheduleSelector, renderRestDayScreen } from './workout-render.js';
 import { getExerciseDefinition, restSeconds } from './workout-utils.js';
 
 let undoToastRemove = null;
 
+function getWeekStart(dateLike) {
+  if (!dateLike) return null;
+  const value = typeof dateLike === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateLike)
+    ? new Date(`${dateLike}T12:00:00`)
+    : new Date(dateLike);
+  if (Number.isNaN(value.getTime())) return null;
+  const day = (value.getDay() + 6) % 7; // lunes = 0
+  value.setDate(value.getDate() - day);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
+// Racha semanal: semanas consecutivas con al menos una sesión guardada.
+function computeWeeklyStreak(logs) {
+  const counts = new Map();
+  (logs || []).forEach((log) => {
+    const start = getWeekStart(log?.date || log?.startTime || log?.endTime);
+    if (!start) return;
+    const key = start.getTime();
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const thisWeek = getWeekStart(new Date());
+  const thisWeekKey = thisWeek.getTime();
+  let cursor = thisWeekKey;
+  if (!counts.get(cursor)) cursor -= weekMs;
+
+  let weeks = 0;
+  while ((counts.get(cursor) || 0) > 0) {
+    weeks += 1;
+    cursor -= weekMs;
+  }
+
+  const dots = [];
+  for (let i = 6; i >= 0; i -= 1) {
+    dots.push((counts.get(thisWeekKey - i * weekMs) || 0) > 0);
+  }
+
+  return { weeks, currentWeekCount: counts.get(thisWeekKey) || 0, dots };
+}
+
+function renderWeeklyStreak(streak) {
+  const weekLabel = streak.weeks === 1 ? 'semana' : 'semanas';
+  const sessionLabel = streak.currentWeekCount === 1 ? 'sesión' : 'sesiones';
+  return `
+    <div class="bg-[var(--card)] rounded-2xl p-3 border border-[var(--border)] shadow-xs flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center shrink-0">
+          ${icon('flame', 'w-5 h-5')}
+        </span>
+        <div class="min-w-0">
+          <p class="text-[13px] font-bold text-[var(--foreground)] truncate">
+            ${streak.weeks === 0 ? 'Empieza tu racha' : `Racha: ${streak.weeks} ${weekLabel}`}
+          </p>
+          <p class="text-[12px] text-[var(--muted-foreground)] truncate">
+            ${streak.weeks === 0 ? 'Completa tu primera sesión' : `${streak.currentWeekCount} ${sessionLabel} esta semana`}
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0" role="img" aria-label="Últimas 7 semanas: ${streak.dots.map(d => d ? 'con sesión' : 'sin sesión').join(', ')}">
+        ${streak.dots.map(active => `<span class="w-2 h-2 rounded-full ${active ? 'bg-emerald-500' : 'bg-[var(--border)]'}"></span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
 export function renderWorkoutModule(container, preserveScroll = false) {
   const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
   const profile = db.getProfile();
+  const streak = computeWeeklyStreak(db.getWorkoutLogs());
   const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const todayName = daysOfWeek[new Date().getDay()];
   const currentDayId = isLive ? state.activeWorkout.routineId : state.selectedDay;
@@ -80,15 +149,15 @@ export function renderWorkoutModule(container, preserveScroll = false) {
               </span>
               <div>
                 <p class="text-sm font-bold text-[var(--foreground)]">Entrenamiento en Curso: ${escapeHtml(routine.name)}</p>
-                <p class="text-xs text-[var(--muted-foreground)]">${escapeHtml(routine.dayName)} • Sesión 18:00 hrs</p>
+                <p class="text-[13px] text-[var(--muted-foreground)]">${escapeHtml(routine.dayName)} • Sesión 18:00 hrs</p>
               </div>
             </div>
             <div class="flex gap-2">
-              <button id="btnFinishWorkout" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg shadow-sm transition-all flex items-center gap-1">
-                ✓ Terminar
+              <button id="btnFinishWorkout" class="btn-touch bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-3 rounded-lg shadow-sm transition-all inline-flex items-center gap-1.5">
+                ${icon('check', 'w-4 h-4')} Terminar
               </button>
-              <button id="btnCancelWorkout" class="text-rose-400 hover:bg-rose-500/10 text-xs px-2 py-1.5 rounded-lg transition-all" title="Descartar">
-                ✕
+              <button id="btnCancelWorkout" class="btn-touch w-11 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all inline-flex items-center justify-center" title="Descartar" aria-label="Descartar sesión">
+                ${icon('x', 'w-5 h-5')}
               </button>
             </div>
           </div>
@@ -99,8 +168,8 @@ export function renderWorkoutModule(container, preserveScroll = false) {
               <span class="text-[var(--muted-foreground)]">
                 <b>${completedCount}</b> de <b>${totalExercises}</b> actividades listas (${progressPercent}%)
               </span>
-              <span class="font-bold ${isCardioDone ? 'text-emerald-400' : 'text-amber-500'}">
-                ${isCardioDone ? '🏃 Cardio: ✓ Listo' : '🏃 Cardio: Pendiente'}
+              <span class="font-bold ${isCardioDone ? 'text-emerald-500' : 'text-amber-500'} inline-flex items-center gap-1">
+                ${icon('activity', 'w-3.5 h-3.5')} Cardio: ${isCardioDone ? 'Listo' : 'Pendiente'}
               </span>
             </div>
             <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden">
@@ -120,34 +189,36 @@ export function renderWorkoutModule(container, preserveScroll = false) {
               </span>
               <h2 class="text-lg font-bold text-[var(--foreground)]">${escapeHtml(routine.name)}</h2>
             </div>
-            <p class="text-xs text-[var(--muted-foreground)] mt-1">${escapeHtml(routine.focus)}</p>
+            <p class="text-[13px] text-[var(--muted-foreground)] mt-1">${escapeHtml(routine.focus)}</p>
           </div>
 
           ${!isLive ? `
-            <button id="btnStartWorkout" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm px-4 py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
-              <span>⚡ Iniciar Sesión de Hoy</span>
+            <button id="btnStartWorkout" class="btn-touch bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm px-4 rounded-xl shadow-md transition-all flex items-center justify-center gap-2">
+              ${icon('zap', 'w-4 h-4')} <span>Iniciar sesión de hoy</span>
             </button>
           ` : ''}
         </div>
 
         <!-- Resumen del Programa Diario (Visible de inmediato al tope para no tener dudas) -->
-        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--border)]">
+        <div class="grid grid-cols-1 xs:grid-cols-2 gap-2 mt-3 pt-3 border-t border-[var(--border)]">
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] flex items-center gap-2.5">
-            <span class="text-lg">🏋️</span>
+            <span class="text-[var(--muted-foreground)]">${icon('dumbbell', 'w-5 h-5')}</span>
             <div>
-              <span class="text-[10px] text-[var(--muted-foreground)] block">Fuerza en Máquinas</span>
+              <span class="text-[11px] text-[var(--muted-foreground)] block">Fuerza en Máquinas</span>
               <b class="text-xs text-[var(--foreground)]">${strengthCount} Ejercicios</b>
             </div>
           </div>
           <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5">
-            <span class="text-lg">🏃</span>
+            <span class="text-amber-500">${icon('activity', 'w-5 h-5')}</span>
             <div>
-              <span class="text-[10px] text-amber-500 font-bold block">Cardio Finisher</span>
+              <span class="text-[11px] text-amber-500 font-bold block">Cardio Finisher</span>
               <b class="text-xs text-[var(--foreground)]">20 min Zona 2 (Al Final)</b>
             </div>
           </div>
         </div>
       </div>
+
+      ${!isLive ? renderWeeklyStreak(streak) : ''}
 
       <!-- ============================================================ -->
       <!-- VISTA MODO PREVIA (NO EN VIVO): Todos los ejercicios en orden -->
@@ -192,10 +263,10 @@ export function renderWorkoutModule(container, preserveScroll = false) {
           ` : `
             <!-- Banner si ya completó todo -->
             <div class="bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 text-center space-y-1.5">
-              <span class="text-2xl">🏆</span>
-              <h3 class="text-sm font-bold text-emerald-400">¡Sesión Completa! Rutina y Cardio finalizados</h3>
-              <p class="text-xs text-[var(--muted-foreground)]">
-                ¡Gran trabajo, ${escapeHtml(profile.name)}! Pulsa el botón "✓ Terminar" arriba para guardar en tu historial evolutivo.
+              <span class="inline-flex text-emerald-500">${icon('trophy', 'w-8 h-8')}</span>
+              <h3 class="text-sm font-bold text-emerald-500">¡Sesión Completa! Rutina y Cardio finalizados</h3>
+              <p class="text-[13px] text-[var(--muted-foreground)]">
+                ¡Gran trabajo, ${escapeHtml(profile.name)}! Pulsa el botón "Terminar" arriba para guardar en tu historial evolutivo.
               </p>
             </div>
           `}
@@ -205,7 +276,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
             <div class="mt-6 pt-4 border-t border-[var(--border)] space-y-3">
               <div class="flex items-center justify-between px-1">
                 <div class="flex items-center gap-2">
-                  <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center">✓</span>
+                  <span class="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center">${icon('check', 'w-4 h-4')}</span>
                   <h3 class="text-xs uppercase font-bold tracking-wider text-emerald-500">
                     Completados (${completedExercises.length} de ${totalExercises})
                   </h3>
@@ -263,7 +334,8 @@ function attachWorkoutEvents(container, currentDayId) {
       if (targetEl) {
         const isHidden = targetEl.classList.contains('hidden');
         targetEl.classList.toggle('hidden');
-        if (arrowEl) arrowEl.textContent = isHidden ? '▲' : '▼';
+        btn.setAttribute('aria-expanded', String(isHidden));
+        if (arrowEl) arrowEl.classList.toggle('rotate-180', isHidden);
       }
     });
   });
@@ -277,7 +349,8 @@ function attachWorkoutEvents(container, currentDayId) {
       if (editorEl) {
         const isHidden = editorEl.classList.contains('hidden');
         editorEl.classList.toggle('hidden');
-        if (arrowEl) arrowEl.textContent = isHidden ? '▲' : '▼';
+        btn.setAttribute('aria-expanded', String(isHidden));
+        if (arrowEl) arrowEl.classList.toggle('rotate-180', isHidden);
       }
     });
   });
@@ -380,7 +453,7 @@ function attachWorkoutEvents(container, currentDayId) {
       if (input) {
         const currentVal = parseFloat(input.value) || 0;
         const newVal = Math.max(0, currentVal + delta);
-        const formattedVal = Number.isInteger(newVal) ? newVal : Math.round(newVal * 10) / 10;
+        const formattedVal = Number.isInteger(newVal) ? newVal : Math.round(newVal * 100) / 100;
         input.value = formattedVal;
         state.updateSet(exIndex, setIndex, field, formattedVal, false);
       }
@@ -431,11 +504,15 @@ function attachWorkoutEvents(container, currentDayId) {
         renderWorkoutModule(container, true);
       } else {
         // Solo actualizar el botón y la fila en el DOM directamente sin re-renderizar la página
-        btn.textContent = willBeCompleted ? '✓' : '○';
+        const setNumber = ex.sets[setIndex]?.setNumber ?? (setIndex + 1);
+        btn.innerHTML = `<span class="text-[10px] font-extrabold leading-none">#${setNumber}</span>${icon(willBeCompleted ? 'check' : 'circle', 'w-5 h-5')}`;
+        btn.setAttribute('aria-pressed', String(willBeCompleted));
+        btn.setAttribute('aria-label', `${willBeCompleted ? 'Desmarcar' : 'Marcar'} la serie ${setNumber} como completada`);
         const row = btn.closest('.set-row');
         if (willBeCompleted) {
-          btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500');
+          btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500', 'check-pop');
           btn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
+          setTimeout(() => btn.classList.remove('check-pop'), 220);
           if (row) {
             row.classList.add('bg-emerald-500/10', 'border-emerald-500/20');
             row.classList.remove('bg-[var(--card)]');

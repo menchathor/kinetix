@@ -8,23 +8,41 @@ import { renderAnalyticsModule } from './modules/analytics.js';
 import { renderSettingsModule } from './modules/settings.js';
 import { db } from './services/db.js';
 import { convex } from './services/convex.js';
-import { showToast } from './ui/toast.js';
+import { showToast, hasOpenModal, closeTopModal } from './ui/toast.js';
+import { icon } from './ui/icons.js';
+import { escapeHtml } from './utils/escape.js';
+
+const VALID_TABS = ['workout', 'nutrition', 'analytics', 'settings'];
+const INSTALL_DISMISS_KEY = 'kinetix_install_dismissed';
+
+// Rellena los huecos `data-icon` del HTML estático con SVG de Lucide.
+function hydrateIcons(root = document) {
+  root.querySelectorAll('[data-icon]').forEach((el) => {
+    const name = el.getAttribute('data-icon');
+    if (!name) return;
+    const size = el.getAttribute('data-icon-class') || 'w-5 h-5';
+    el.innerHTML = icon(name, size);
+  });
+}
 
 class App {
   constructor() {
     this.container = document.getElementById('mainContent');
     this.timerOverlay = document.getElementById('floatingTimer');
+    this.isSyncing = false;
     this.init();
   }
 
   init() {
+    hydrateIcons();
     this.initTheme();
 
-    const validTabs = ['workout', 'nutrition', 'analytics', 'settings'];
     const hashTab = location.hash.replace('#', '');
-    if (validTabs.includes(hashTab)) {
+    if (VALID_TABS.includes(hashTab)) {
       state.activeTab = hashTab;
     }
+    // Entrada base del historial: permite que "atrás" vuelva al tab previo.
+    history.replaceState({ tab: state.activeTab }, '', `#${state.activeTab}`);
 
     // Suscribirse a cambios de estado global (preserva la posición de scroll)
     state.subscribe(() => {
@@ -32,30 +50,41 @@ class App {
       this.updateNavigationUI();
       this.updateHeader();
       if (location.hash !== `#${state.activeTab}`) {
-        history.replaceState(null, '', `#${state.activeTab}`);
+        history.replaceState({ tab: state.activeTab }, '', `#${state.activeTab}`);
       }
     });
 
-    // Navegación inferior
+    // Navegación inferior: cada tab crea una entrada real en el historial.
     document.querySelectorAll('.nav-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const tab = btn.getAttribute('data-tab');
-        if (tab !== state.activeTab) {
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          state.setTab(tab);
-        }
+        this.goToTab(btn.getAttribute('data-tab'));
       });
     });
 
-    // Soporte de enlaces directos (manifest shortcuts, atrás/adelante).
+    // Enlaces directos (manifest shortcuts, hash manual).
     window.addEventListener('hashchange', () => {
       const tab = location.hash.replace('#', '');
-      if (validTabs.includes(tab) && tab !== state.activeTab) {
+      if (VALID_TABS.includes(tab) && tab !== state.activeTab) {
+        state.setTab(tab);
+      }
+    });
+
+    // Atrás/adelante: primero cierra un modal; si no hay, cambia de tab.
+    window.addEventListener('popstate', (event) => {
+      if (hasOpenModal()) {
+        closeTopModal();
+        return;
+      }
+      const tab = event.state?.tab || location.hash.replace('#', '');
+      if (VALID_TABS.includes(tab) && tab !== state.activeTab) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
         state.setTab(tab);
       }
     });
 
     this.setupTimerUI();
+    this.setupHeaderStatus();
+    this.setupInstallPrompt();
 
     this.renderCurrentView(false);
     this.updateNavigationUI();
@@ -70,6 +99,14 @@ class App {
     });
 
     this.registerServiceWorker();
+  }
+
+  goToTab(tab, { push = true } = {}) {
+    if (!VALID_TABS.includes(tab)) return;
+    if (tab === state.activeTab) return;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    if (push) history.pushState({ tab }, '', `#${tab}`);
+    state.setTab(tab);
   }
 
   initTheme() {
@@ -100,14 +137,48 @@ class App {
 
   updateThemeIcon(isDark) {
     const iconEl = document.getElementById('themeIcon');
-    if (iconEl) iconEl.textContent = isDark ? '☀️' : '🌙';
+    if (iconEl) iconEl.innerHTML = icon(isDark ? 'sun' : 'moon');
+  }
+
+  setupHeaderStatus() {
+    const btn = document.getElementById('headerSyncStatus');
+    if (btn) btn.addEventListener('click', () => this.goToTab('settings'));
+
+    const refresh = () => this.updateSyncStatus();
+    window.addEventListener('online', refresh);
+    window.addEventListener('offline', refresh);
+    convex.onSyncStatus(refresh);
+    refresh();
+  }
+
+  updateSyncStatus() {
+    const btn = document.getElementById('headerSyncStatus');
+    const iconEl = document.getElementById('headerSyncIcon');
+    const dot = document.getElementById('headerSyncDot');
+    if (!btn || !iconEl) return;
+
+    const online = navigator.onLine;
+    const hasKey = convex.hasSyncKey();
+    iconEl.innerHTML = icon(
+      this.isSyncing ? 'loader' : (online ? 'cloud' : 'cloud-off'),
+      this.isSyncing ? 'w-5 h-5 animate-spin' : 'w-5 h-5'
+    );
+
+    if (dot) dot.classList.toggle('hidden', online && hasKey);
+    const label = this.isSyncing
+      ? 'Sincronizando datos'
+      : online
+        ? (hasKey ? 'Sincronización configurada y en línea' : 'En línea, sin clave de sincronización')
+        : 'Sin conexión, guardando en el dispositivo';
+    btn.setAttribute('aria-label', `Estado de sincronización: ${label}`);
+    btn.setAttribute('title', label);
   }
 
   updateHeader() {
     const profile = db.getProfile();
     const subtitle = document.getElementById('headerSubtitle');
     if (subtitle) {
-      subtitle.textContent = `Recomposición Corporal • ${profile.targetWeightMin}-${profile.targetWeightMax} kg`;
+      subtitle.innerHTML = `Recomposición Corporal<span class="hidden xs:inline"> • ${escapeHtml(profile.targetWeightMin)}-${escapeHtml(profile.targetWeightMax)} kg</span>`;
     }
 
     const gymTime = document.getElementById('headerGymTime');
@@ -184,7 +255,10 @@ class App {
 
       if (timeDisplay) timeDisplay.textContent = formatted;
       if (progressBar) progressBar.style.width = `${progress}%`;
-      if (toggleBtn) toggleBtn.textContent = isRunning ? '⏸' : '▶';
+      if (toggleBtn) {
+        toggleBtn.innerHTML = icon(isRunning ? 'pause' : 'play');
+        toggleBtn.setAttribute('aria-label', isRunning ? 'Pausar el descanso' : 'Reanudar el descanso');
+      }
     });
 
     timer.onComplete(() => {
@@ -217,9 +291,74 @@ class App {
     timer.restore();
   }
 
+  setupInstallPrompt() {
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredPrompt = event;
+
+      let dismissedAt = 0;
+      try { dismissedAt = Number(localStorage.getItem(INSTALL_DISMISS_KEY)) || 0; } catch { /* noop */ }
+      if (Date.now() - dismissedAt < 30 * 24 * 60 * 60 * 1000) return;
+      this.showInstallBanner(deferredPrompt);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      this.hideInstallBanner();
+      try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch { /* noop */ }
+      showToast('Kinetix instalado en tu dispositivo.', 'success');
+    });
+  }
+
+  showInstallBanner(promptEvent) {
+    if (document.getElementById('kinetixInstallBanner')) return;
+
+    const banner = document.createElement('div');
+    banner.id = 'kinetixInstallBanner';
+    banner.className = 'fixed left-3 right-3 z-[70] max-w-md mx-auto rounded-2xl border border-[var(--border)] bg-[var(--card)] p-3 shadow-2xl soft-in';
+    banner.style.bottom = 'calc(5.5rem + env(safe-area-inset-bottom, 0px))';
+    banner.innerHTML = `
+      <div class="flex items-center gap-3">
+        <span class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/30 flex items-center justify-center shrink-0">
+          ${icon('download')}
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-bold text-[var(--foreground)]">Instala Kinetix</p>
+          <p class="text-[11px] text-[var(--muted-foreground)]">Acceso directo y funcionamiento offline.</p>
+        </div>
+        <button type="button" id="btnInstallPwa" class="btn-touch px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">Instalar</button>
+        <button type="button" id="btnDismissInstall" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--accent)] flex items-center justify-center" aria-label="Ahora no">
+          ${icon('x')}
+        </button>
+      </div>
+    `;
+    document.body.appendChild(banner);
+
+    const dismiss = () => {
+      this.hideInstallBanner();
+      try { localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now())); } catch { /* noop */ }
+    };
+
+    banner.querySelector('#btnDismissInstall')?.addEventListener('click', dismiss);
+    banner.querySelector('#btnInstallPwa')?.addEventListener('click', async () => {
+      if (!promptEvent) return dismiss();
+      promptEvent.prompt();
+      const choice = await promptEvent.userChoice.catch(() => ({ outcome: 'dismissed' }));
+      if (choice.outcome !== 'accepted') dismiss();
+      else this.hideInstallBanner();
+    });
+  }
+
+  hideInstallBanner() {
+    document.getElementById('kinetixInstallBanner')?.remove();
+  }
+
   async initAutoSync() {
     const runSync = async (source) => {
       if (!navigator.onLine || !convex.hasSyncKey()) return;
+      this.isSyncing = true;
+      this.updateSyncStatus();
       try {
         const res = await db.syncTwoWay();
         if (res && res.success && (res.importedWorkouts > 0 || res.importedMeas > 0 || res.importedWeights > 0 || res.profileApplied)) {
@@ -231,6 +370,9 @@ class App {
         }
       } catch (err) {
         debugLog('[AutoSync] Diferido:', err);
+      } finally {
+        this.isSyncing = false;
+        this.updateSyncStatus();
       }
     };
 

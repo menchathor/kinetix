@@ -5,6 +5,7 @@ import { CONFIG } from '../config.js';
 import { state } from '../state.js';
 import { escapeHtml, escapeAttr, safeUrl, toNumber } from '../utils/escape.js';
 import { showToast, confirmAction, showError } from '../ui/toast.js';
+import { icon } from '../ui/icons.js';
 
 let settingsCleanup = null;
 
@@ -30,7 +31,7 @@ export function renderSettingsModule(container) {
             Perfil editable
           </span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">Parámetros fisiológicos activos para recomposición corporal</p>
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">Parámetros fisiológicos activos para recomposición corporal</p>
 
         <div class="space-y-2 text-xs">
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
@@ -88,8 +89,9 @@ export function renderSettingsModule(container) {
 
         <!-- Editor de perfil -->
         <details class="mt-4 pt-3 border-t border-[var(--border)] group">
-          <summary class="cursor-pointer text-xs font-bold text-amber-500 hover:text-amber-400 select-none">
-            ✏️ Editar datos del perfil
+          <summary class="btn-touch cursor-pointer text-xs font-bold text-amber-500 hover:text-amber-400 select-none inline-flex items-center gap-1.5">
+            ${icon('pen-line', 'w-4 h-4')} Editar datos del perfil
+            <span class="ml-1 transition-transform group-open:rotate-180">${icon('chevron-down', 'w-4 h-4')}</span>
           </summary>
           <div class="grid grid-cols-2 gap-2.5 mt-3 text-xs">
             ${profileField('profileName', 'Nombre', profile.name, 'text')}
@@ -113,10 +115,10 @@ export function renderSettingsModule(container) {
             </div>
           </div>
           <div class="mt-3 flex gap-2">
-            <button id="btnSaveProfile" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
+            <button id="btnSaveProfile" class="btn-touch flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-xs transition-all shadow-xs">
               Guardar perfil
             </button>
-            <button id="btnSaveProfileCloud" class="px-3 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+            <button id="btnSaveProfileCloud" class="btn-touch px-3 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
               Guardar y sincronizar
             </button>
           </div>
@@ -127,26 +129,30 @@ export function renderSettingsModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border ${convex.hasSyncKey() ? 'border-emerald-500/30' : 'border-amber-500/40'} shadow-xs">
         <div class="flex items-center justify-between mb-1">
           <div class="flex items-center gap-2">
-            <span class="text-base">🔐</span>
+            <span class="text-[var(--muted-foreground)]">${icon('lock', 'w-5 h-5')}</span>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Clave de Sincronización</h3>
           </div>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${convex.hasSyncKey() ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">
-            ${convex.hasSyncKey() ? '🟢 Configurada' : '🟡 Sin configurar'}
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${convex.hasSyncKey() ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">
+            <span class="w-1.5 h-1.5 rounded-full ${convex.hasSyncKey() ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+            ${convex.hasSyncKey() ? 'Configurada' : 'Sin configurar'}
           </span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           La nube contiene datos de salud, por lo que todas las operaciones exigen esta clave.
           Se guarda sólo en este dispositivo y nunca en el código público.
         </p>
         <div class="flex flex-col sm:flex-row gap-2">
-          <input id="inputSyncKey" type="password" autocomplete="current-password" placeholder="Pega aquí tu clave de sincronización" class="flex-1 text-xs py-2 px-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500" />
-          <button id="btnSaveSyncKey" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs transition-all">Guardar clave</button>
+          <div class="flex-1 min-w-0">
+            <label for="inputSyncKey" class="sr-only">Clave de sincronización</label>
+            <input id="inputSyncKey" type="password" autocomplete="current-password" placeholder="Pega aquí tu clave de sincronización" class="w-full text-[13px] px-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500" />
+          </div>
+          <button id="btnSaveSyncKey" class="btn-touch bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 rounded-xl text-xs transition-all">Guardar clave</button>
         </div>
         <div class="flex flex-wrap gap-2 mt-2">
-          <button id="btnTestSyncKey" class="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)]">Probar conexión</button>
-          <button id="btnClearSyncKey" class="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--border)]">Olvidar clave</button>
+          <button id="btnTestSyncKey" class="btn-touch text-[12px] font-semibold px-3 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)] inline-flex items-center gap-1.5">${icon('wifi', 'w-4 h-4')} Probar conexión</button>
+          <button id="btnClearSyncKey" class="btn-touch text-[12px] font-semibold px-3 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[var(--muted-foreground)] hover:bg-[var(--border)] inline-flex items-center gap-1.5">${icon('x', 'w-4 h-4')} Olvidar clave</button>
         </div>
-        <p class="text-[10px] text-[var(--muted-foreground)] mt-2">
+        <p class="text-[12px] text-[var(--muted-foreground)] mt-2">
           Configúrala en el servidor con <code class="font-mono">npx convex env set KINETIX_SYNC_KEY &lt;clave&gt;</code>.
         </p>
       </div>
@@ -155,31 +161,32 @@ export function renderSettingsModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between mb-1">
           <div class="flex items-center gap-2">
-            <span class="text-base">🏆</span>
+            <span class="text-amber-500">${icon('trophy', 'w-5 h-5')}</span>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Bitácora de Fuerza & Pesos Base</h3>
           </div>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
             ${exercisesAnalytics.length} Máquinas
           </span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           Administra el peso base objetivo para tus próximos entrenamientos y revisa tus logros de sobrecarga progresiva.
         </p>
 
         <div class="relative">
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-2 pr-6 scrollbar-none text-[11px]" id="exerciseFilterTabs">
-            <button data-filter="all" class="filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0">Todos (${exercisesAnalytics.length})</button>
-            <button data-filter="torso1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🏋️ Torso 1</button>
-            <button data-filter="pierna1" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🦵 Pierna 1</button>
-            <button data-filter="torso2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">💪 Torso 2</button>
-            <button data-filter="pierna2" class="filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0">🔥 Pierna 2</button>
+          <div class="flex items-center gap-1.5 overflow-x-auto pb-2 pr-6 scrollbar-none text-[12px]" id="exerciseFilterTabs">
+            <button data-filter="all" class="filter-tab-btn btn-touch px-3 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0 inline-flex items-center justify-center">Todos (${exercisesAnalytics.length})</button>
+            <button data-filter="torso1" class="filter-tab-btn btn-touch px-3 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0 inline-flex items-center justify-center gap-1.5">${icon('dumbbell', 'w-4 h-4')} Torso 1</button>
+            <button data-filter="pierna1" class="filter-tab-btn btn-touch px-3 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0 inline-flex items-center justify-center gap-1.5">${icon('footprints', 'w-4 h-4')} Pierna 1</button>
+            <button data-filter="torso2" class="filter-tab-btn btn-touch px-3 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0 inline-flex items-center justify-center gap-1.5">${icon('dumbbell', 'w-4 h-4')} Torso 2</button>
+            <button data-filter="pierna2" class="filter-tab-btn btn-touch px-3 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0 inline-flex items-center justify-center gap-1.5">${icon('flame', 'w-4 h-4')} Pierna 2</button>
           </div>
           <div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[var(--card)] to-transparent sm:hidden" aria-hidden="true"></div>
         </div>
 
         <div class="relative my-2.5">
-          <input type="text" id="inputSearchExercise" placeholder="Buscar por ejercicio o músculo..." class="w-full text-xs py-2 pl-8 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors" />
-          <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-[var(--muted-foreground)]" aria-hidden="true">🔍</span>
+          <label for="inputSearchExercise" class="sr-only">Buscar ejercicio o músculo</label>
+          <input type="text" id="inputSearchExercise" placeholder="Buscar por ejercicio o músculo..." class="w-full text-[13px] pl-9 pr-3 rounded-xl bg-[var(--accent)] border border-[var(--border)] text-[var(--foreground)] placeholder-[var(--muted-foreground)] outline-none focus:border-amber-500 transition-colors" />
+          <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)]" aria-hidden="true">${icon('search', 'w-4 h-4')}</span>
         </div>
 
         <div class="space-y-3 mt-3" id="exerciseAnalyticsList">
@@ -193,18 +200,18 @@ export function renderSettingsModule(container) {
       <!-- APARIENCIA Y TEMA -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-base">🎨</span>
+          <span class="text-[var(--muted-foreground)]">${icon('palette', 'w-5 h-5')}</span>
           <h3 class="text-sm font-bold text-[var(--foreground)]">Apariencia y Modo Visual</h3>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           Alterna entre modo oscuro (ideal para poca luz) y modo claro (máxima legibilidad diurna).
         </p>
 
-        <div class="flex items-center justify-between p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)]">
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)]">
           <label for="selectThemeSetting" class="text-xs font-semibold text-[var(--foreground)]">Tema de la interfaz:</label>
-          <select id="selectThemeSetting" class="text-xs py-1.5 px-3 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] font-medium outline-none">
-            <option value="dark" ${db.getTheme() !== 'light' ? 'selected' : ''}>🌙 Modo Oscuro</option>
-            <option value="light" ${db.getTheme() === 'light' ? 'selected' : ''}>☀️ Modo Claro</option>
+          <select id="selectThemeSetting" class="text-xs px-3 rounded-lg bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] font-medium outline-none">
+            <option value="dark" ${db.getTheme() !== 'light' ? 'selected' : ''}>Modo Oscuro</option>
+            <option value="light" ${db.getTheme() === 'light' ? 'selected' : ''}>Modo Claro</option>
           </select>
         </div>
         <div class="flex items-center justify-between p-2.5 rounded-xl bg-[var(--accent)] border border-[var(--border)] mt-2">
@@ -217,33 +224,37 @@ export function renderSettingsModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between mb-1">
           <div class="flex items-center gap-2">
-            <span class="text-base">☁️</span>
+            <span class="text-[var(--muted-foreground)]">${icon('cloud', 'w-5 h-5')}</span>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Nube Kinetix (Convex)</h3>
           </div>
-          <span id="cloudStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full ${convex.isOnline ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">
-            ${convex.isOnline ? '🟢 En Línea' : '🟡 Modo Offline'}
+          <span id="cloudStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${convex.isOnline ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">
+            <span class="w-1.5 h-1.5 rounded-full ${convex.isOnline ? 'bg-emerald-500' : 'bg-amber-500'}"></span>
+            ${convex.isOnline ? 'En línea' : 'Modo offline'}
           </span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           Tus registros se guardan primero en este dispositivo y se respaldan en Convex. El merge usa <code class="font-mono">updatedAt</code> y respeta las eliminaciones hechas offline.
         </p>
 
         <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-2.5 text-xs">
-          <div class="flex items-center justify-between text-[11px]">
+          <div class="flex items-center justify-between text-[12px] gap-2">
             <span class="text-[var(--muted-foreground)]">Estado de red:</span>
-            <span class="font-semibold ${convex.isOnline ? 'text-emerald-400' : 'text-amber-400'}">${convex.isOnline ? 'Conectado a Internet' : 'Sin conexión (guardando local)'}</span>
+            <span class="font-semibold ${convex.isOnline ? 'text-emerald-500' : 'text-amber-500'} inline-flex items-center gap-1">
+              ${convex.isOnline ? icon('wifi', 'w-3.5 h-3.5') : icon('wifi-off', 'w-3.5 h-3.5')}
+              ${convex.isOnline ? 'Conectado a Internet' : 'Sin conexión (guardando local)'}
+            </span>
           </div>
-          <div class="flex items-center justify-between text-[11px]">
+          <div class="flex items-center justify-between text-[12px] gap-2">
             <span class="text-[var(--muted-foreground)]">Última sincronización:</span>
             <span id="textLastSync" class="font-mono text-[var(--foreground)]">${convex.lastSyncTime ? new Date(convex.lastSyncTime).toLocaleTimeString() : 'Automática'}</span>
           </div>
 
           <div class="pt-1 flex flex-col sm:flex-row gap-2">
-            <button id="btnSyncNow" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs">
-              <span id="iconSync" aria-hidden="true">☁️</span> <span id="textSyncBtn">Sincronizar ahora</span>
+            <button id="btnSyncNow" class="btn-touch flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 shadow-xs">
+              <span id="iconSync" aria-hidden="true">${icon('cloud-upload', 'w-4 h-4')}</span> <span id="textSyncBtn">Sincronizar ahora</span>
             </button>
-            <button id="btnPullFromCloud" class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
-              <span aria-hidden="true">📥</span> Restaurar desde la nube
+            <button id="btnPullFromCloud" class="btn-touch flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-semibold px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
+              <span aria-hidden="true">${icon('download', 'w-4 h-4')}</span> Restaurar desde la nube
             </button>
           </div>
         </div>
@@ -252,20 +263,20 @@ export function renderSettingsModule(container) {
       <!-- RESPALDO Y RESTAURACIÓN DE DATOS (JSON) -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-base">💾</span>
+          <span class="text-[var(--muted-foreground)]">${icon('save', 'w-5 h-5')}</span>
           <h3 class="text-sm font-bold text-[var(--foreground)]">Copia de Seguridad & Portabilidad</h3>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           Incluye entrenamientos, mediciones, nutrición, perfil y pesos personalizados. Guárdalo en Drive o úsalo para migrar.
         </p>
 
         <div class="flex flex-col sm:flex-row gap-2">
-          <button id="btnExportJSON" class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
-            <span aria-hidden="true">📥</span> Descargar copia (.json)
+          <button id="btnExportJSON" class="btn-touch flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--foreground)] font-bold px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5">
+            <span aria-hidden="true">${icon('download', 'w-4 h-4')}</span> Descargar copia (.json)
           </button>
 
-          <label class="flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-semibold py-2.5 px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer text-center">
-            <span aria-hidden="true">📤</span> Restaurar desde .json
+          <label tabindex="0" role="button" class="btn-touch flex-1 bg-[var(--accent)] hover:bg-[var(--border)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] font-semibold px-3 rounded-xl text-xs transition-all border border-[var(--border)] flex items-center justify-center gap-1.5 cursor-pointer text-center">
+            <span aria-hidden="true">${icon('upload', 'w-4 h-4')}</span> Restaurar desde .json
             <input type="file" id="fileImportJSON" accept=".json,application/json" class="hidden" />
           </label>
         </div>
@@ -278,11 +289,11 @@ export function renderSettingsModule(container) {
             <p class="font-bold text-[var(--foreground)]">Kinetix v${escapeHtml(CONFIG.APP_VERSION)} (PWA)</p>
             <p class="text-[11px]">Local-First + Convex Cloud · Perfil editable · Offline</p>
           </div>
-          <button id="btnClearCacheReload" class="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 font-bold border border-amber-500/30 text-[11px] flex items-center gap-1 transition-colors">
-            <span aria-hidden="true">🔄</span> Forzar actualización
+          <button id="btnClearCacheReload" class="btn-touch px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-500 font-bold border border-amber-500/30 text-[11px] flex items-center justify-center gap-1.5 transition-colors">
+            <span aria-hidden="true">${icon('refresh-cw', 'w-4 h-4')}</span> Forzar actualización
           </button>
         </div>
-        <p class="text-[11px] opacity-75">Úsalo si cambiaste de versión y el móvil sigue mostrando código viejo en caché.</p>
+        <p class="text-[12px]">Úsalo si cambiaste de versión y el móvil sigue mostrando código viejo en caché.</p>
       </div>
 
     </div>
@@ -337,9 +348,9 @@ function renderExercisesAnalyticsList(exercises) {
   return exercises.map(ex => {
     const stats = ex.stats;
     const progressBadge = stats.progressKg > 0
-      ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">🚀 +${stats.progressKg} kg (+${stats.progressPercent}%)</span>`
+      ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">${icon('trending-up', 'w-3.5 h-3.5')} +${stats.progressKg} kg (+${stats.progressPercent}%)</span>`
       : stats.totalSessions > 0
-        ? `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">⚖️ En ritmo</span>`
+        ? `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">${icon('activity', 'w-3.5 h-3.5')} En ritmo</span>`
         : `<span class="inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] bg-[var(--accent)] px-2 py-0.5 rounded-full">Base inicial</span>`;
 
     const keywords = `${ex.name} ${ex.targetMuscles || ''} ${ex.machineName || ''} ${ex.routineName || ''}`.toLowerCase();
@@ -366,7 +377,7 @@ function renderExercisesAnalyticsList(exercises) {
             <div class="flex items-start justify-between gap-1 min-w-0">
               <div class="min-w-0 flex-1">
                 <h4 class="text-xs font-bold text-[var(--foreground)] truncate">${escapeHtml(ex.name)}</h4>
-                <p class="text-[11px] text-[var(--muted-foreground)] truncate">${escapeHtml(ex.targetMuscles || ex.machineName)}</p>
+                <p class="text-[12px] text-[var(--muted-foreground)] truncate">${escapeHtml(ex.targetMuscles || ex.machineName)}</p>
               </div>
               <div class="shrink-0">${progressBadge}</div>
             </div>
@@ -389,10 +400,10 @@ function renderExercisesAnalyticsList(exercises) {
                 type="button"
                 data-id="${safeId}"
                 data-delta="-2.5"
-                class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
+                class="btn-adjust-custom-weight w-11 h-11 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
                 title="Bajar 2.5 kg"
-                aria-label="Bajar 2.5 kg"
-              >−</button>
+                aria-label="Bajar 2.5 kg a ${escapeAttr(ex.name)}"
+              >${icon('minus', 'w-4 h-4')}</button>
 
               <div class="relative flex items-center">
                 <input
@@ -401,31 +412,33 @@ function renderExercisesAnalyticsList(exercises) {
                   min="0"
                   data-id="${safeId}"
                   value="${escapeAttr(stats.targetWeight)}"
-                  class="input-custom-weight w-16 text-center font-bold text-amber-500 bg-[var(--card)] border border-[var(--border)] rounded-lg py-1 text-xs outline-none focus:border-amber-500 transition-colors"
+                  class="input-custom-weight w-20 text-center font-bold text-amber-500 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[13px] outline-none focus:border-amber-500 transition-colors"
                   aria-label="Peso objetivo en kg para ${escapeAttr(ex.name)}"
                 />
-                <span class="absolute right-1 text-[10px] text-[var(--muted-foreground)] pointer-events-none">kg</span>
+                <span class="absolute right-1.5 text-[10px] text-[var(--muted-foreground)] pointer-events-none">kg</span>
               </div>
 
               <button
                 type="button"
                 data-id="${safeId}"
                 data-delta="2.5"
-                class="btn-adjust-custom-weight w-7 h-7 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-sm text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
+                class="btn-adjust-custom-weight w-11 h-11 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
                 title="Subir 2.5 kg"
-                aria-label="Subir 2.5 kg"
-              >+</button>
+                aria-label="Subir 2.5 kg a ${escapeAttr(ex.name)}"
+              >${icon('plus', 'w-4 h-4')}</button>
             </div>
-            <span id="savedIndicator_${safeId}" class="text-[10px] font-bold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
+            <span id="savedIndicator_${safeId}" class="text-[10px] font-bold text-emerald-500 opacity-0 transition-opacity inline-flex items-center gap-1">${icon('check', 'w-3.5 h-3.5')} Guardado</span>
           </div>
 
           <button
             type="button"
             data-target="history_${safeId}"
-            class="btn-toggle-history text-[11px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1 transition-colors px-2 py-1 rounded-lg hover:bg-amber-500/10"
+            aria-expanded="false"
+            aria-controls="history_${safeId}"
+            class="btn-toggle-history btn-touch text-[12px] font-bold text-amber-500 hover:text-amber-400 flex items-center gap-1.5 transition-colors px-2.5 rounded-lg hover:bg-amber-500/10"
           >
-            <span>📜 Bitácora (${stats.history.length})</span>
-            <span class="text-[9px] transition-transform duration-200">▼</span>
+            <span class="inline-flex items-center gap-1.5">${icon('history', 'w-4 h-4')} Bitácora (${stats.history.length})</span>
+            <span class="transition-transform duration-200">${icon('chevron-down', 'w-4 h-4')}</span>
           </button>
         </div>
 
@@ -518,6 +531,8 @@ function attachSettingsEvents(container) {
   let currentFilter = 'all';
   let currentSearch = '';
 
+  filterTabs.forEach(btn => btn.setAttribute('aria-pressed', String(btn.dataset.filter === currentFilter)));
+
   const filterCards = () => {
     const cards = container.querySelectorAll('.exercise-card-item');
     let visibleCount = 0;
@@ -541,9 +556,11 @@ function attachSettingsEvents(container) {
   filterTabs.forEach(btn => {
     btn.addEventListener('click', () => {
       filterTabs.forEach(b => {
-        b.className = 'filter-tab-btn px-2.5 py-1 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0';
+        b.className = 'filter-tab-btn btn-touch px-3 rounded-lg font-medium text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-all shrink-0 inline-flex items-center justify-center gap-1.5';
+        b.setAttribute('aria-pressed', 'false');
       });
-      btn.className = 'filter-tab-btn px-2.5 py-1 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0';
+      btn.className = 'filter-tab-btn btn-touch px-3 rounded-lg font-bold bg-amber-500 text-slate-950 transition-all shrink-0 inline-flex items-center justify-center gap-1.5';
+      btn.setAttribute('aria-pressed', 'true');
       currentFilter = btn.dataset.filter || 'all';
       filterCards();
     });
@@ -591,6 +608,7 @@ function attachSettingsEvents(container) {
       if (targetEl) {
         const isHidden = targetEl.classList.contains('hidden');
         targetEl.classList.toggle('hidden', !isHidden);
+        btn.setAttribute('aria-expanded', String(isHidden));
         if (chevron) chevron.style.transform = isHidden ? 'rotate(180deg)' : '';
       }
     });
@@ -681,10 +699,10 @@ function attachSettingsEvents(container) {
   // --- ESTADO EN VIVO DE CONVEX ---
   const unsubscribe = convex.onSyncStatus(({ isOnline, lastSync }) => {
     if (cloudStatusBadge) {
-      cloudStatusBadge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full ${
+      cloudStatusBadge.className = `text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
         isOnline ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
       }`;
-      cloudStatusBadge.textContent = isOnline ? '🟢 En Línea' : '🟡 Modo Offline';
+      cloudStatusBadge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-500'}"></span>${isOnline ? 'En línea' : 'Modo offline'}`;
     }
     if (textLastSync && lastSync) {
       textLastSync.textContent = new Date(lastSync).toLocaleTimeString();
@@ -698,7 +716,7 @@ function attachSettingsEvents(container) {
       document.documentElement.classList.toggle('dark', isDark);
       db.setTheme(isDark ? 'dark' : 'light');
       const iconEl = document.getElementById('themeIcon');
-      if (iconEl) iconEl.textContent = isDark ? '☀️' : '🌙';
+      if (iconEl) iconEl.innerHTML = icon(isDark ? 'sun' : 'moon');
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.setAttribute('content', isDark ? '#090d16' : '#f8fafc');
       state.notify();
@@ -724,13 +742,13 @@ function attachSettingsEvents(container) {
       const iconSync = container.querySelector('#iconSync');
       const textSync = container.querySelector('#textSyncBtn');
       btnSyncNow.disabled = true;
-      if (iconSync) iconSync.textContent = '⏳';
+      if (iconSync) iconSync.innerHTML = icon('loader', 'w-4 h-4 animate-spin');
       if (textSync) textSync.textContent = 'Sincronizando…';
 
       try {
         const res = await db.syncTwoWay();
         if (res && res.success) {
-          if (iconSync) iconSync.textContent = '✅';
+          if (iconSync) iconSync.innerHTML = icon('check', 'w-4 h-4');
           if (textSync) textSync.textContent = '¡Sincronizado!';
           if (textLastSync) textLastSync.textContent = new Date().toLocaleTimeString();
           showToast(`Sincronizado: +${res.importedWorkouts} entrenos, +${res.importedMeas} mediciones.`, 'success', 5000);
@@ -743,7 +761,7 @@ function attachSettingsEvents(container) {
       } finally {
         btnSyncNow.disabled = false;
         setTimeout(() => {
-          if (iconSync) iconSync.textContent = '☁️';
+          if (iconSync) iconSync.innerHTML = icon('cloud-upload', 'w-4 h-4');
           if (textSync) textSync.textContent = 'Sincronizar ahora';
         }, 3000);
       }
@@ -766,7 +784,7 @@ function attachSettingsEvents(container) {
       if (!ok) return;
 
       btnPullFromCloud.disabled = true;
-      btnPullFromCloud.textContent = '⏳ Sincronizando…';
+      btnPullFromCloud.innerHTML = `${icon('loader', 'w-4 h-4 animate-spin')} Sincronizando…`;
 
       try {
         const res = await db.syncTwoWay();
@@ -780,7 +798,7 @@ function attachSettingsEvents(container) {
         showError(err, 'Excepción al descargar datos.');
       } finally {
         btnPullFromCloud.disabled = false;
-        btnPullFromCloud.textContent = '📥 Restaurar desde la nube';
+        btnPullFromCloud.innerHTML = `${icon('download', 'w-4 h-4')} Restaurar desde la nube`;
       }
     });
   }
@@ -793,6 +811,12 @@ function attachSettingsEvents(container) {
   }
 
   if (fileImport) {
+    fileImport.closest('label')?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        fileImport.click();
+      }
+    });
     fileImport.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -834,15 +858,18 @@ function attachSettingsEvents(container) {
       if (!ok) return;
 
       btnClearCache.disabled = true;
-      btnClearCache.innerHTML = '<span>⏳ Actualizando…</span>';
+      btnClearCache.innerHTML = `${icon('loader', 'w-4 h-4 animate-spin')} Actualizando…`;
       try {
         const filesToRefresh = [
           './', './index.html', './sw.js', './manifest.json',
-          './assets/css/tailwind.css', './assets/vendor/chart.umd.min.js',
+          './assets/css/fonts.css', './assets/css/tailwind.css', './assets/vendor/chart.umd.min.js',
+          './assets/fonts/barlow-400.woff2', './assets/fonts/barlow-500.woff2',
+          './assets/fonts/barlow-600.woff2', './assets/fonts/barlow-700.woff2',
+          './assets/fonts/barlow-condensed-600.woff2', './assets/fonts/barlow-condensed-700.woff2',
           './js/config.js', './js/app.js', './js/state.js',
           './js/data/initialData.js', './js/services/convex.js', './js/services/db.js',
           './js/services/timer.js', './js/services/merge.js',
-          './js/utils/escape.js', './js/ui/toast.js',
+          './js/utils/escape.js', './js/ui/toast.js', './js/ui/icons.js',
           './js/modules/workout.js', './js/modules/workout-render.js', './js/modules/workout-utils.js',
           './js/modules/nutrition.js',
           './js/modules/analytics.js', './js/modules/settings.js'

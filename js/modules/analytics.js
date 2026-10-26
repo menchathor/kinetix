@@ -1,11 +1,14 @@
 // Módulo de Evolución, Gráficas de Sobrecarga Progresiva y Mediciones Corporales
 import { db, formatDisplayDate } from '../services/db.js';
 import { escapeHtml, escapeAttr, toNumber } from '../utils/escape.js';
-import { showToast, confirmAction } from '../ui/toast.js';
+import { showToast, confirmAction, pushModalHistory } from '../ui/toast.js';
+import { icon } from '../ui/icons.js';
 
 let weightChartInstance = null;
 let exerciseChartInstance = null;
 let analyticsEscapeHandler = null;
+let analyticsModalHistory = null;
+let weightChartView = 'bars';
 
 function sortedAscending(measurements) {
   return [...measurements]
@@ -67,17 +70,22 @@ function displayNumber(value, suffix = '') {
 }
 
 export function renderAnalyticsModule(container) {
+  if (analyticsModalHistory) {
+    analyticsModalHistory.release();
+    analyticsModalHistory = null;
+  }
   const profile = db.getProfile();
   const measurements = db.getMeasurements();
   const workoutLogs = db.getWorkoutLogs();
   const allExercises = db.getAllExercisesAnalytics();
   const composition = computeComposition(measurements, profile);
+  const weightSeries = buildMonthlyWeightSeries(measurements);
 
   const routinesOrder = [
-    { id: 'torso1', label: '🏋️ Torso 1 (Lunes)' },
-    { id: 'pierna1', label: '🦵 Pierna 1 (Martes)' },
-    { id: 'torso2', label: '💪 Torso 2 (Jueves)' },
-    { id: 'pierna2', label: '🔥 Pierna 2 (Viernes)' }
+    { id: 'torso1', label: 'Torso 1 (Lunes)' },
+    { id: 'pierna1', label: 'Pierna 1 (Martes)' },
+    { id: 'torso2', label: 'Torso 2 (Jueves)' },
+    { id: 'pierna2', label: 'Pierna 2 (Viernes)' }
   ];
 
   const exerciseOptionsHtml = routinesOrder.map(group => {
@@ -101,8 +109,8 @@ export function renderAnalyticsModule(container) {
           <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startWeight)}</span>
           <span class="text-sm font-extrabold text-[var(--foreground)]">${displayNumber(composition.currentWeight)} kg</span>
         </div>
-        <span class="text-[10px] font-bold ${composition.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'}">
-          ${composition.weightDiff === 0 ? 'Sin cambio' : `${composition.weightDiff < 0 ? '📉' : '📈'} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
+        <span class="text-[10px] font-bold ${composition.weightDiff <= 0 ? 'text-emerald-500' : 'text-amber-500'} inline-flex items-center gap-1">
+          ${composition.weightDiff === 0 ? 'Sin cambio' : `${composition.weightDiff < 0 ? icon('trending-down', 'w-3.5 h-3.5') : icon('trending-up', 'w-3.5 h-3.5')} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
         </span>
       </div>
 
@@ -112,8 +120,8 @@ export function renderAnalyticsModule(container) {
           <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startFat)}</span>
           <span class="text-sm font-extrabold text-amber-500">${displayNumber(composition.endFat)} kg</span>
         </div>
-        <span class="text-[10px] font-bold ${composition.fatLost >= 0 ? 'text-emerald-400' : 'text-amber-400'}">
-          ${composition.fatLost === 0 ? 'Sin cambio' : `${composition.fatLost > 0 ? '🔥' : '📈'} ${composition.fatLost > 0 ? '-' : '+'}${Math.abs(composition.fatLost)} kg grasa`}
+        <span class="text-[10px] font-bold ${composition.fatLost >= 0 ? 'text-emerald-500' : 'text-amber-500'} inline-flex items-center gap-1">
+          ${composition.fatLost === 0 ? 'Sin cambio' : `${composition.fatLost > 0 ? icon('flame', 'w-3.5 h-3.5') : icon('trending-up', 'w-3.5 h-3.5')} ${composition.fatLost > 0 ? '-' : '+'}${Math.abs(composition.fatLost)} kg grasa`}
         </span>
       </div>
 
@@ -123,9 +131,9 @@ export function renderAnalyticsModule(container) {
           <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startFatPercent, '%')}</span>
           <span class="text-sm font-extrabold text-amber-500">${displayNumber(composition.endFatPercent, '%')}</span>
         </div>
-        <span class="text-[10px] font-bold text-emerald-400">
+        <span class="text-[10px] font-bold text-emerald-500 inline-flex items-center gap-1">
           ${composition.startFatPercent > 0 && composition.endFatPercent > 0
-            ? `${composition.endFatPercent <= composition.startFatPercent ? '📉' : '📈'} ${(composition.endFatPercent - composition.startFatPercent).toFixed(1)}%`
+            ? `${composition.endFatPercent <= composition.startFatPercent ? icon('trending-down', 'w-3.5 h-3.5') : icon('trending-up', 'w-3.5 h-3.5')} ${(composition.endFatPercent - composition.startFatPercent).toFixed(1)}%`
             : 'Sin comparación'}
         </span>
       </div>
@@ -136,9 +144,9 @@ export function renderAnalyticsModule(container) {
           <span class="text-xs text-[var(--muted-foreground)] line-through">${displayNumber(composition.startTrunkFat)}</span>
           <span class="text-sm font-extrabold text-[var(--foreground)]">${displayNumber(composition.endTrunkFat)} kg</span>
         </div>
-        <span class="text-[10px] font-bold text-emerald-400">
+        <span class="text-[10px] font-bold text-emerald-500">
           ${composition.startTrunkFat > 0 && composition.endTrunkFat > 0
-            ? `🎯 ${(composition.endTrunkFat - composition.startTrunkFat).toFixed(2)} kg`
+            ? `${icon('target', 'w-3.5 h-3.5 inline')} ${(composition.endTrunkFat - composition.startTrunkFat).toFixed(2)} kg`
             : 'Sin comparación'}
         </span>
       </div>
@@ -160,9 +168,9 @@ export function renderAnalyticsModule(container) {
           <span class="text-xs text-[var(--muted-foreground)]">${displayNumber(composition.startLean)}</span>
           <span class="text-sm font-extrabold text-blue-400">${displayNumber(composition.endLean)} kg</span>
         </div>
-        <span class="text-[10px] font-bold text-blue-400">
+        <span class="text-[10px] font-bold text-blue-500 inline-flex items-center gap-1">
           ${composition.startLean > 0 && composition.endLean > 0
-            ? `${composition.endLean >= composition.startLean ? '🛡️' : '📉'} ${(composition.endLean - composition.startLean).toFixed(1)} kg`
+            ? `${composition.endLean >= composition.startLean ? icon('shield', 'w-3.5 h-3.5') : icon('trending-down', 'w-3.5 h-3.5')} ${(composition.endLean - composition.startLean).toFixed(1)} kg`
             : 'Sin comparación'}
         </span>
       </div>
@@ -187,9 +195,9 @@ export function renderAnalyticsModule(container) {
         <div class="flex items-center justify-between">
           <div>
             <h2 class="text-base font-bold text-[var(--foreground)]">Evolución & Métricas Corporales</h2>
-            <p class="text-xs text-[var(--muted-foreground)]">Seguimiento de peso, grasa visceral y sobrecarga progresiva</p>
+            <p class="text-[13px] text-[var(--muted-foreground)]">Seguimiento de peso, grasa visceral y sobrecarga progresiva</p>
           </div>
-          <button id="btnOpenNewMeasurementModal" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-xl shadow-xs transition-all">
+          <button id="btnOpenNewMeasurementModal" class="btn-touch bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 rounded-xl shadow-xs transition-all">
             + Nueva medición
           </button>
         </div>
@@ -198,8 +206,8 @@ export function renderAnalyticsModule(container) {
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Peso actual</span>
             <span class="text-base font-extrabold text-[var(--foreground)] block">${displayNumber(composition.currentWeight)} kg</span>
-            <span class="text-[10px] font-bold ${composition.weightDiff !== null && composition.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'}">
-              ${composition.weightDiff === null ? 'Sin referencia' : `${composition.weightDiff < 0 ? '📉' : composition.weightDiff > 0 ? '📈' : '•'} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
+            <span class="text-[10px] font-bold ${composition.weightDiff !== null && composition.weightDiff <= 0 ? 'text-emerald-500' : 'text-amber-500'} inline-flex items-center gap-1">
+              ${composition.weightDiff === null ? 'Sin referencia' : `${composition.weightDiff < 0 ? icon('trending-down', 'w-3.5 h-3.5') : composition.weightDiff > 0 ? icon('trending-up', 'w-3.5 h-3.5') : '•'} ${composition.weightDiff > 0 ? '+' : ''}${composition.weightDiff} kg`}
             </span>
           </div>
           <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
@@ -221,22 +229,22 @@ export function renderAnalyticsModule(container) {
 
         <div class="flex items-center justify-between relative">
           <div class="flex items-center gap-2.5">
-            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-base">🏆</div>
+            <div class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-500">${icon('trophy', 'w-5 h-5')}</div>
             <div>
               <div class="flex items-center gap-1.5">
                 <h3 class="text-sm font-bold text-[var(--foreground)]">Recomposición Corporal • Control InBody</h3>
                 <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">${composition.hasComparison ? 'Progreso' : 'Pendiente'}</span>
               </div>
-              <p class="text-[11px] text-[var(--muted-foreground)]">
+              <p class="text-[12px] text-[var(--muted-foreground)]">
                 ${composition.first && composition.last
-                  ? `${escapeHtml(formatDisplayDate(composition.first.date))} ➔ ${escapeHtml(formatDisplayDate(composition.last.date))}`
+                  ? `${escapeHtml(formatDisplayDate(composition.first.date))} ${icon('arrow-right', 'w-3.5 h-3.5 inline')} ${escapeHtml(formatDisplayDate(composition.last.date))}`
                   : 'Sin mediciones suficientes'}
               </p>
             </div>
           </div>
           ${composition.pureFatPercent !== null ? `
-            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              ✓ ${composition.pureFatPercent}% grasa pura
+            <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 inline-flex items-center gap-1">
+              ${icon('check', 'w-3.5 h-3.5')} ${composition.pureFatPercent}% grasa pura
             </span>
           ` : ''}
         </div>
@@ -244,10 +252,10 @@ export function renderAnalyticsModule(container) {
         ${comparisonRows}
 
         <div class="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs space-y-1">
-          <div class="flex items-center gap-1.5 font-bold text-emerald-400">
-            <span>🔬</span> Diagnóstico de recomposición fisiológica
+          <div class="flex items-center gap-1.5 font-bold text-emerald-500">
+            <span>${icon('microscope', 'w-4 h-4')}</span> Diagnóstico de recomposición fisiológica
           </div>
-          <p class="text-[11px] text-[var(--foreground)]/90 leading-relaxed">${synthesis}</p>
+          <p class="text-[12px] text-[var(--foreground)]/90 leading-relaxed">${synthesis}</p>
           ${composition.bmr > 0 ? `<p class="text-[10px] text-[var(--muted-foreground)]">TMB del último control: <b>${composition.bmr} kcal/día</b></p>` : ''}
         </div>
       </div>
@@ -256,25 +264,60 @@ export function renderAnalyticsModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
           <h3 class="text-sm font-bold text-[var(--foreground)]">Evolución mensual de peso</h3>
-          <div class="flex flex-wrap items-center gap-2 text-[10px]">
-            <span class="inline-flex items-center gap-1 text-blue-400 font-bold"><span class="w-2 h-2 rounded-full bg-blue-500"></span> InBody</span>
-            <span class="inline-flex items-center gap-1 text-amber-500 font-bold"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Báscula hogar</span>
-            <span class="inline-flex items-center gap-1 text-emerald-400 font-bold"><span class="w-4 border-t border-dashed border-emerald-400"></span> Meta</span>
+          <div role="group" aria-label="Tipo de gráfica de peso" class="flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--accent)] border border-[var(--border)]">
+            <button type="button" data-weight-view="bars" aria-pressed="${weightChartView === 'bars'}" class="weight-view-btn btn-touch px-2 rounded-lg text-[11px] font-bold transition-colors inline-flex items-center gap-1 ${weightChartView === 'bars' ? 'bg-[var(--card)] text-amber-500 shadow-xs' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}">
+              ${icon('chart-column', 'w-3.5 h-3.5')} Barras
+            </button>
+            <button type="button" data-weight-view="trend" aria-pressed="${weightChartView === 'trend'}" class="weight-view-btn btn-touch px-2 rounded-lg text-[11px] font-bold transition-colors inline-flex items-center gap-1 ${weightChartView === 'trend' ? 'bg-[var(--card)] text-amber-500 shadow-xs' : 'text-[var(--muted-foreground)] hover:text-[var(--foreground)]'}">
+              ${icon('chart-line', 'w-3.5 h-3.5')} Tendencia
+            </button>
           </div>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mb-3">
+        <div class="flex flex-wrap items-center gap-2 text-[10px] mb-2">
+          <span class="inline-flex items-center gap-1 text-blue-500 font-bold"><span class="w-2 h-2 rounded-full bg-blue-500"></span> InBody</span>
+          <span class="inline-flex items-center gap-1 text-amber-500 font-bold"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Báscula hogar</span>
+          <span class="inline-flex items-center gap-1 text-emerald-500 font-bold"><span class="w-4 border-t border-dashed border-emerald-500"></span> Meta</span>
+        </div>
+        <p class="text-[13px] text-[var(--muted-foreground)] mb-3">
           Última medición de cada mes por equipo. Rango objetivo ${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg.
         </p>
         ${measurements.length === 0 ? `
           <div class="h-56 flex flex-col items-center justify-center rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] text-center px-4">
-            <span class="text-2xl mb-2" aria-hidden="true">📊</span>
+            <span class="text-[var(--muted-foreground)] mb-2" aria-hidden="true">${icon('chart-column', 'w-7 h-7')}</span>
             <p class="text-xs font-semibold text-[var(--foreground)]">Aún no hay mediciones para graficar</p>
-            <p class="text-[11px] text-[var(--muted-foreground)] mt-1">Registra tu primer control con “+ Nueva medición”.</p>
+            <p class="text-[12px] text-[var(--muted-foreground)] mt-1">Registra tu primer control con “+ Nueva medición”.</p>
           </div>
         ` : `
           <div class="h-64 relative">
             <canvas id="chartWeightTrend"></canvas>
           </div>
+          <details class="mt-3 group">
+            <summary class="btn-touch cursor-pointer text-[12px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] inline-flex items-center gap-1.5">
+              ${icon('list', 'w-4 h-4')} Ver datos en tabla
+              <span class="transition-transform group-open:rotate-180">${icon('chevron-down', 'w-4 h-4')}</span>
+            </summary>
+            <div class="mt-2 overflow-x-auto rounded-xl border border-[var(--border)]">
+              <table class="w-full text-[12px] text-left">
+                <caption class="sr-only">Peso mensual por equipo y rango meta</caption>
+                <thead class="bg-[var(--accent)]/60 text-[var(--muted-foreground)]">
+                  <tr>
+                    <th scope="col" class="px-3 py-2 font-bold">Mes</th>
+                    <th scope="col" class="px-3 py-2 font-bold">InBody</th>
+                    <th scope="col" class="px-3 py-2 font-bold">Báscula hogar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${weightSeries.labels.map((label, index) => `
+                    <tr class="border-t border-[var(--border)]">
+                      <th scope="row" class="px-3 py-2 font-semibold text-[var(--foreground)]">${escapeHtml(label)}</th>
+                      <td class="px-3 py-2 font-mono">${weightSeries.inbodyData[index] != null ? `${weightSeries.inbodyData[index]} kg` : '—'}</td>
+                      <td class="px-3 py-2 font-mono">${weightSeries.homeData[index] != null ? `${weightSeries.homeData[index]} kg` : '—'}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </details>
         `}
       </div>
 
@@ -283,7 +326,7 @@ export function renderAnalyticsModule(container) {
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Historial de Mediciones Corporales</h3>
-            <p class="text-xs text-[var(--muted-foreground)]">Controles clínicos InBody y pesajes matutinos en hogar</p>
+            <p class="text-[13px] text-[var(--muted-foreground)]">Controles clínicos InBody y pesajes matutinos en hogar</p>
           </div>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
             ${measurements.length} registros
@@ -307,8 +350,8 @@ export function renderAnalyticsModule(container) {
                 <div>
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="font-extrabold text-[var(--foreground)] text-sm">${displayNumber(toNumber(weight))} kg</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${isClinic ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'}">
-                      ${isClinic ? '🏥 InBody multicanal' : '🏠 Báscula hogar'}
+                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold inline-flex items-center gap-1 ${isClinic ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-amber-500/15 text-amber-500 border border-amber-500/30'}">
+                      ${isClinic ? icon('hospital', 'w-3.5 h-3.5') : icon('scale', 'w-3.5 h-3.5')} ${isClinic ? 'InBody multicanal' : 'Báscula hogar'}
                     </span>
                     <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${escapeHtml(dateStr)}</span>
                   </div>
@@ -325,7 +368,7 @@ export function renderAnalyticsModule(container) {
                   <span class="text-[10px] font-bold px-2 py-1 rounded-lg ${isClinic ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--accent)] text-[var(--muted-foreground)]'}">
                     ${isClinic ? 'Referencia clínica' : 'Seguimiento diario'}
                   </span>
-                  <button type="button" class="btn-delete-measurement text-rose-400 hover:text-rose-300 px-2 py-1 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">🗑️</button>
+                  <button type="button" class="btn-delete-measurement w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">${icon('trash-2', 'w-5 h-5')}</button>
                 </div>
               </div>
             `;
@@ -338,7 +381,7 @@ export function renderAnalyticsModule(container) {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Sobrecarga Progresiva por Máquina</h3>
-            <p class="text-xs text-[var(--muted-foreground)]">Historial de placas y repeticiones de las ${allExercises.length} máquinas</p>
+            <p class="text-[13px] text-[var(--muted-foreground)]">Historial de placas y repeticiones de las ${allExercises.length} máquinas</p>
           </div>
           <select id="selectExerciseForChart" aria-label="Seleccionar ejercicio para la gráfica" class="text-xs py-1.5 px-2.5 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] outline-none font-medium max-w-full sm:max-w-xs">
             ${exerciseOptionsHtml}
@@ -347,6 +390,7 @@ export function renderAnalyticsModule(container) {
         <div class="h-56 relative">
           <canvas id="chartExerciseProgression"></canvas>
         </div>
+        <div id="exerciseChartTable" class="mt-2"></div>
       </div>
 
       <!-- HISTORIAL DE SESIONES COMPLETADAS -->
@@ -354,7 +398,7 @@ export function renderAnalyticsModule(container) {
         <div class="flex items-center justify-between mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Historial de Entrenamientos</h3>
-            <p class="text-xs text-[var(--muted-foreground)]">Toca una sesión para desplegar el detalle de ejercicios y cargas</p>
+            <p class="text-[13px] text-[var(--muted-foreground)]">Toca una sesión para desplegar el detalle de ejercicios y cargas</p>
           </div>
           <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
             ${workoutLogs.length} sesiones
@@ -373,27 +417,27 @@ export function renderAnalyticsModule(container) {
 
             return `
               <div class="rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] overflow-hidden text-xs transition-all">
-                <div class="p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-[var(--accent)]/70 transition-colors btn-toggle-workout-detail" data-target="workout-detail-${logIdx}">
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" class="w-full p-3 flex items-center justify-between gap-2 text-left hover:bg-[var(--accent)]/70 transition-colors btn-toggle-workout-detail" data-target="workout-detail-${logIdx}" aria-expanded="false" aria-controls="workout-detail-${logIdx}">
+                  <span class="block min-w-0">
+                    <span class="flex items-center gap-2 flex-wrap">
                       <span class="font-bold text-[var(--foreground)] text-xs sm:text-sm">${escapeHtml(log.routineName || 'Sesión')}</span>
                       <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--card)] text-[var(--muted-foreground)] border border-[var(--border)]">
                         ${escapeHtml(formatDisplayDate(log))}
                       </span>
-                      ${hasCardio ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-bold">🏃 Cardio ✓</span>` : ''}
-                    </div>
-                    <p class="text-[11px] text-[var(--muted-foreground)] mt-0.5">
+                      ${hasCardio ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-bold inline-flex items-center gap-1">${icon('activity', 'w-3 h-3')} Cardio</span>` : ''}
+                    </span>
+                    <span class="block text-[12px] text-[var(--muted-foreground)] mt-0.5">
                       ${strengthExercises.length} máquinas registradas ${log.durationMinutes ? `• ${escapeHtml(log.durationMinutes)} min` : ''}
-                    </p>
-                  </div>
+                    </span>
+                  </span>
 
-                  <div class="flex items-center gap-2 shrink-0">
+                  <span class="flex items-center gap-2 shrink-0">
                     <span class="text-[11px] font-semibold text-amber-500 flex items-center gap-1">
                       <span>Detalle</span>
-                      <span class="text-[9px] transition-transform" id="arrow-workout-detail-${logIdx}">▼</span>
+                      <span class="transition-transform duration-200" id="arrow-workout-detail-${logIdx}">${icon('chevron-down', 'w-4 h-4')}</span>
                     </span>
-                  </div>
-                </div>
+                  </span>
+                </button>
 
                 <div id="workout-detail-${logIdx}" class="hidden px-3 pb-3 pt-2 border-t border-[var(--border)]/60 bg-[var(--card)]/50 space-y-2">
                   ${exercisesList.length > 0 ? `
@@ -408,8 +452,8 @@ export function renderAnalyticsModule(container) {
 
                         return `
                           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 py-1.5 px-2.5 rounded-lg bg-[var(--accent)]/40 border border-[var(--border)]/50">
-                            <span class="font-semibold text-[var(--foreground)] text-[11px]">
-                              ${isCardioItem ? '🏃 ' : '🏋️ '}${escapeHtml(ex.exerciseName || ex.exerciseId)}
+                            <span class="font-semibold text-[var(--foreground)] text-[11px] inline-flex items-center gap-1.5">
+                              ${isCardioItem ? icon('activity', 'w-3.5 h-3.5 text-amber-500') : icon('dumbbell', 'w-3.5 h-3.5 text-amber-500')} ${escapeHtml(ex.exerciseName || ex.exerciseId)}
                             </span>
                             <span class="font-mono text-[11px] text-amber-400 font-bold break-words">
                               ${escapeHtml(setsText || 'Sin series')}
@@ -418,18 +462,18 @@ export function renderAnalyticsModule(container) {
                         `;
                       }).join('')}
                     </div>
-                  ` : `<p class="text-[11px] text-[var(--muted-foreground)]">Sin desglose de ejercicios en esta sesión.</p>`}
+                  ` : `<p class="text-[12px] text-[var(--muted-foreground)]">Sin desglose de ejercicios en esta sesión.</p>`}
 
-                  ${log.notes ? `<p class="text-[11px] text-[var(--muted-foreground)] italic pt-1">Nota: ${escapeHtml(log.notes)}</p>` : ''}
+                  ${log.notes ? `<p class="text-[12px] text-[var(--muted-foreground)] italic pt-1">Nota: ${escapeHtml(log.notes)}</p>` : ''}
 
                   <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/50 gap-2">
                     <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">ID: ${escapeHtml(sessionId)}</span>
                     <button
                       type="button"
-                      class="btn-delete-workout-session text-[11px] font-bold text-rose-400 hover:text-rose-300 px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all flex items-center gap-1 shrink-0"
+                      class="btn-delete-workout-session btn-touch text-[11px] font-bold text-rose-500 hover:text-rose-400 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all inline-flex items-center justify-center gap-1.5 shrink-0"
                       data-session-id="${escapeAttr(sessionId)}"
                       data-routine-name="${escapeAttr(log.routineName || 'Sesión')}">
-                      🗑️ Eliminar sesión
+                      ${icon('trash-2', 'w-4 h-4')} Eliminar sesión
                     </button>
                   </div>
                 </div>
@@ -445,9 +489,9 @@ export function renderAnalyticsModule(container) {
           <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
             <div>
               <h3 id="measurementModalTitle" class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
-              <p class="text-[11px] text-[var(--muted-foreground)]">Registra control InBody o pesaje en hogar</p>
+              <p class="text-[12px] text-[var(--muted-foreground)]">Registra control InBody o pesaje en hogar</p>
             </div>
-            <button id="btnCloseMeasModal" class="text-[var(--muted-foreground)] hover:text-[var(--foreground)] text-sm font-bold p-1" aria-label="Cerrar">✕</button>
+            <button id="btnCloseMeasModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-5 h-5')}</button>
           </div>
 
           <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">
@@ -459,9 +503,9 @@ export function renderAnalyticsModule(container) {
               <div>
                 <label for="inputMeasSource" class="font-bold text-[var(--foreground)] block mb-1">Equipo / fuente</label>
                 <select id="inputMeasSource" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-medium">
-                  <option value="Eufy Life (Báscula hogar)">🏠 Eufy Life (hogar)</option>
-                  <option value="Smart Fit (InBody multicanal)">🏥 InBody (Smart Fit)</option>
-                  <option value="Manual">📝 Registro manual</option>
+                  <option value="Eufy Life (Báscula hogar)">Eufy Life (hogar)</option>
+                  <option value="Smart Fit (InBody multicanal)">InBody (Smart Fit)</option>
+                  <option value="Manual">Registro manual</option>
                 </select>
               </div>
             </div>
@@ -523,10 +567,10 @@ export function renderAnalyticsModule(container) {
           </div>
 
           <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
-            <button id="btnSaveMeasurement" class="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs">
+            <button id="btnSaveMeasurement" class="btn-touch flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-[13px] transition-all shadow-xs">
               Guardar y sincronizar
             </button>
-            <button id="btnCancelMeasModal" class="px-4 py-2.5 rounded-xl border border-[var(--border)] text-xs text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+            <button id="btnCancelMeasModal" class="btn-touch px-4 rounded-xl border border-[var(--border)] text-[13px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
               Cancelar
             </button>
           </div>
@@ -537,7 +581,7 @@ export function renderAnalyticsModule(container) {
   `;
 
   attachAnalyticsEvents(container);
-  initWeightChart(measurements, profile);
+  initWeightChart(measurements, profile, weightChartView);
   const initialExId = container.querySelector('#selectExerciseForChart')?.value || 'chest_press';
   initExerciseChart(workoutLogs, initialExId);
 }
@@ -550,14 +594,18 @@ function attachAnalyticsEvents(container) {
   const btnSave = container.querySelector('#btnSaveMeasurement');
   const selectExercise = container.querySelector('#selectExerciseForChart');
 
-  const closeModal = () => {
+  const closeModal = ({ fromPop = false } = {}) => {
     modal?.classList.add('hidden');
+    const historyEntry = analyticsModalHistory;
+    analyticsModalHistory = null;
+    historyEntry?.release({ fromPop });
     btnOpen?.focus();
   };
 
   if (btnOpen && modal) {
     btnOpen.addEventListener('click', () => {
       modal.classList.remove('hidden');
+      analyticsModalHistory = pushModalHistory(() => closeModal({ fromPop: true }));
       container.querySelector('#inputMeasDate')?.focus();
     });
   }
@@ -627,6 +675,24 @@ function attachAnalyticsEvents(container) {
     });
   }
 
+  // Alternar barras / tendencia sin perder el estado del resto de la vista.
+  container.querySelectorAll('.weight-view-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const view = btn.dataset.weightView === 'trend' ? 'trend' : 'bars';
+      if (view === weightChartView) return;
+      weightChartView = view;
+      container.querySelectorAll('.weight-view-btn').forEach(item => {
+        const active = item.dataset.weightView === weightChartView;
+        item.setAttribute('aria-pressed', String(active));
+        item.classList.toggle('bg-[var(--card)]', active);
+        item.classList.toggle('text-amber-500', active);
+        item.classList.toggle('shadow-xs', active);
+        item.classList.toggle('text-[var(--muted-foreground)]', !active);
+      });
+      initWeightChart(db.getMeasurements(), db.getProfile(), weightChartView);
+    });
+  });
+
   container.querySelectorAll('.btn-toggle-workout-detail').forEach(header => {
     header.addEventListener('click', () => {
       const targetId = header.getAttribute('data-target');
@@ -635,7 +701,8 @@ function attachAnalyticsEvents(container) {
       if (detailEl) {
         const isHidden = detailEl.classList.contains('hidden');
         detailEl.classList.toggle('hidden');
-        if (arrowEl) arrowEl.textContent = isHidden ? '▲' : '▼';
+        header.setAttribute('aria-expanded', String(isHidden));
+        if (arrowEl) arrowEl.classList.toggle('rotate-180', isHidden);
       }
     });
   });
@@ -708,13 +775,13 @@ function buildMonthlyWeightSeries(measurements) {
   };
 }
 
-function initWeightChart(measurements, profile) {
+function initWeightChart(measurements, profile, view = 'bars') {
   const canvas = document.getElementById('chartWeightTrend');
   if (!canvas || typeof Chart === 'undefined') return;
 
   const isDark = document.documentElement.classList.contains('dark');
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
-  const textColor = isDark ? '#94a3b8' : '#64748b';
+  const textColor = isDark ? '#94a3b8' : '#475569';
 
   const series = buildMonthlyWeightSeries(measurements);
   if (series.labels.length === 0) return;
@@ -732,52 +799,97 @@ function initWeightChart(measurements, profile) {
     return null;
   };
 
+  const goalLine = {
+    type: 'line',
+    label: 'Meta',
+    data: series.labels.map(() => targetMax),
+    borderColor: '#10b981',
+    borderDash: [6, 4],
+    borderWidth: 1.5,
+    pointRadius: 0,
+    pointHitRadius: 0,
+    fill: false,
+    order: 10
+  };
+
+  const barDatasets = [
+    {
+      type: 'bar',
+      label: 'InBody',
+      data: series.inbodyData,
+      backgroundColor: 'rgba(59, 130, 246, 0.78)',
+      hoverBackgroundColor: 'rgba(59, 130, 246, 0.95)',
+      borderColor: '#3b82f6',
+      borderWidth: 1,
+      borderRadius: 6,
+      borderSkipped: false,
+      barPercentage: 0.9,
+      categoryPercentage: 0.45
+    },
+    {
+      type: 'bar',
+      label: 'B?scula hogar',
+      data: series.homeData,
+      backgroundColor: 'rgba(245, 158, 11, 0.78)',
+      hoverBackgroundColor: 'rgba(245, 158, 11, 0.95)',
+      borderColor: '#f59e0b',
+      borderWidth: 1,
+      borderRadius: 6,
+      borderSkipped: false,
+      barPercentage: 0.9,
+      categoryPercentage: 0.45
+    },
+    goalLine
+  ];
+
+  const lineDatasets = [
+    {
+      type: 'line',
+      label: 'InBody',
+      data: series.inbodyData,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.14)',
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#3b82f6',
+      tension: 0.25,
+      spanGaps: true,
+      fill: true
+    },
+    {
+      type: 'line',
+      label: 'B?scula hogar',
+      data: series.homeData,
+      borderColor: '#f59e0b',
+      backgroundColor: 'rgba(245, 158, 11, 0.14)',
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      pointBackgroundColor: '#f59e0b',
+      tension: 0.25,
+      spanGaps: true,
+      fill: true
+    },
+    goalLine
+  ];
+
+  const summary = series.labels.map((label, index) => {
+    const values = [];
+    if (series.inbodyData[index] != null) values.push(`InBody ${series.inbodyData[index]} kg`);
+    if (series.homeData[index] != null) values.push(`hogar ${series.homeData[index]} kg`);
+    return `${label}${values.length ? ': ' + values.join(', ') : ': sin dato'}`;
+  }).join('; ');
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', `Evoluci?n mensual de peso. ${summary}. Rango meta ${targetMin} a ${targetMax} kilogramos.`);
+
   if (weightChartInstance) weightChartInstance.destroy();
 
   weightChartInstance = new Chart(canvas, {
-    type: 'bar',
+    type: view === 'trend' ? 'line' : 'bar',
     data: {
       labels: series.labels,
-      datasets: [
-        {
-          label: 'InBody',
-          data: series.inbodyData,
-          backgroundColor: 'rgba(59, 130, 246, 0.78)',
-          hoverBackgroundColor: 'rgba(59, 130, 246, 0.95)',
-          borderColor: '#3b82f6',
-          borderWidth: 1,
-          borderRadius: 6,
-          borderSkipped: false,
-          // Barras más anchas dentro del grupo = menos espacio entre InBody
-          // y báscula; el grupo no ocupa todo el mes para mantenerlo legible.
-          barPercentage: 0.9,
-          categoryPercentage: 0.45
-        },
-        {
-          label: 'Báscula hogar',
-          data: series.homeData,
-          backgroundColor: 'rgba(245, 158, 11, 0.78)',
-          hoverBackgroundColor: 'rgba(245, 158, 11, 0.95)',
-          borderColor: '#f59e0b',
-          borderWidth: 1,
-          borderRadius: 6,
-          borderSkipped: false,
-          barPercentage: 0.9,
-          categoryPercentage: 0.45
-        },
-        {
-          type: 'line',
-          label: 'Meta',
-          data: series.labels.map(() => targetMax),
-          borderColor: '#10b981',
-          borderDash: [6, 4],
-          borderWidth: 1.5,
-          pointRadius: 0,
-          pointHitRadius: 0,
-          fill: false,
-          order: 10
-        }
-      ]
+      datasets: view === 'trend' ? lineDatasets : barDatasets
     },
     options: {
       responsive: true,
@@ -790,7 +902,7 @@ function initWeightChart(measurements, profile) {
           grid: { color: gridColor },
           ticks: {
             color: textColor,
-            font: { size: 10 },
+            font: { size: 11 },
             callback: (value) => `${value} kg`
           }
         },
@@ -798,7 +910,7 @@ function initWeightChart(measurements, profile) {
           grid: { display: false },
           ticks: {
             color: textColor,
-            font: { size: 10 },
+            font: { size: 11 },
             maxRotation: 0,
             autoSkip: true,
             maxTicksLimit: 12
@@ -806,7 +918,6 @@ function initWeightChart(measurements, profile) {
         }
       },
       plugins: {
-        // La leyenda se muestra en HTML para no duplicarla.
         legend: { display: false },
         tooltip: {
           backgroundColor: isDark ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)',
@@ -880,6 +991,52 @@ function initExerciseChart(workoutLogs, exerciseId) {
 
   const stats = db.getExerciseEvolutionStats(exerciseId);
   const fallbackWeight = stats?.targetWeight || stats?.baselineWeight || 0;
+
+  const exerciseName = document.querySelector('#selectExerciseForChart option:checked')?.textContent?.trim() || 'Ejercicio seleccionado';
+  const summary = (labels.length > 0 ? labels : ['Base configurada']).map((label, index) => {
+    const weightValue = weights[index] ?? fallbackWeight;
+    const repValue = reps[index] ?? 10;
+    return `${label}: ${weightValue} kg × ${repValue} reps`;
+  }).join('; ');
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', `Sobrecarga progresiva de ${exerciseName}. ${summary}.`);
+
+  const tableHost = document.getElementById('exerciseChartTable');
+  if (tableHost) {
+    if (labels.length === 0) {
+      tableHost.innerHTML = `<p class="text-[12px] text-[var(--muted-foreground)]">Aún no hay sesiones registradas para esta máquina. La tabla aparecerá al completar series.</p>`;
+    } else {
+      tableHost.innerHTML = `
+        <details class="group">
+          <summary class="btn-touch cursor-pointer text-[12px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] inline-flex items-center gap-1.5">
+            ${icon('list', 'w-4 h-4')} Ver datos en tabla
+            <span class="transition-transform group-open:rotate-180">${icon('chevron-down', 'w-4 h-4')}</span>
+          </summary>
+          <div class="mt-2 overflow-x-auto rounded-xl border border-[var(--border)]">
+            <table class="w-full text-[12px] text-left">
+              <caption class="sr-only">Sobrecarga progresiva de ${escapeHtml(exerciseName)}</caption>
+              <thead class="bg-[var(--accent)]/60 text-[var(--muted-foreground)]">
+                <tr>
+                  <th scope="col" class="px-3 py-2 font-bold">Fecha</th>
+                  <th scope="col" class="px-3 py-2 font-bold">Carga</th>
+                  <th scope="col" class="px-3 py-2 font-bold">Reps</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${labels.map((label, index) => `
+                  <tr class="border-t border-[var(--border)]">
+                    <th scope="row" class="px-3 py-2 font-semibold text-[var(--foreground)]">${escapeHtml(label)}</th>
+                    <td class="px-3 py-2 font-mono">${weights[index] ?? 0} kg</td>
+                    <td class="px-3 py-2 font-mono">${reps[index] ?? 0}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      `;
+    }
+  }
 
   if (exerciseChartInstance) exerciseChartInstance.destroy();
 

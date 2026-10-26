@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.17** — Tema claro por defecto con modo oscuro opcional, tipografía móvil más legible, controles homogéneos, steppers de series con iconos SVG, borrado de series extra con deshacer y sincronización local-first segura.
+> **v1.18** — Rediseño de interfaz guiado por UI/UX: Barlow autoalojada, iconos SVG en toda la app, objetivos táctiles de 44 px, tema claro/oscuro con contraste AA, navegación atrás real, estado de sync en cabecera, instalación PWA y gráficas accesibles con vista de tabla y tendencia.
 
 ---
 
@@ -17,9 +17,13 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 - Historial editable, duración de sesión y borrado con confirmación.
 
 ### Interfaz
-- **Tema claro por defecto** y modo oscuro opcional desde Ajustes.
-- Etiquetas móviles con un mínimo de 11 px y campos de formulario con altura consistente.
-- Iconos SVG en las acciones de las series (menos, más, check, papelera).
+- **Tema claro por defecto** y modo oscuro opcional desde Ajustes, con tokens semánticos de color.
+- Tipografía **Barlow / Barlow Condensed** autoalojada (funciona offline).
+- Objetivos táctiles de **44 px** en controles, steppers, filtros y acciones; safe areas iOS.
+- Iconos SVG (Lucide) en navegación, cabeceras, estados y acciones; sin emojis estructurales.
+- Navegación con historial real: el botón “atrás” cierra modales y vuelve al tab anterior.
+- Indicador de sincronización en la cabecera y banner de instalación PWA.
+- Racha semanal ligera basada en sesiones guardadas.
 
 ### Descanso
 - Temporizador flotante con presets, `+15 s`, pausa y barra de progreso.
@@ -33,14 +37,16 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 
 ### Evolución
 - Gráficas de peso (Chart.js) y de sobrecarga por máquina.
+- Vista **Barras / Tendencia** para el peso, con tabla de datos accesible.
+- `aria-label` descriptivo y tablas de respaldo en ambas gráficas.
 - Comparativa de recomposición calculada desde las mediciones (sin valores hardcodeados).
 - Registro de bioimpedancia (InBody / báscula hogar), notas y borrado.
 - Perfil clínico y metas editables desde Ajustes.
 
 ### PWA / Offline
-- Service Worker con precache del shell, CSS, Chart.js local, módulos y todas las ilustraciones (≈1,4 MB).
-- Sin CDNs en runtime: Tailwind compilado y Chart.js fijado a una versión local.
-- Instalable en Android/iOS, con `manifest` completo y atajos.
+- Service Worker con precache del shell, CSS, fuentes, iconos, Chart.js local, módulos y todas las ilustraciones.
+- Sin CDNs en runtime: Tailwind compilado, Barlow autoalojada y Chart.js fijado a una versión local.
+- Instalable en Android/iOS, con `manifest` completo, atajos y prompt de instalación propio.
 
 ### Nube
 - Convex como respaldo opcional, protegido por **clave de sincronización**.
@@ -60,10 +66,12 @@ manifest.json              PWA
 assets/
   css/tailwind.css         Tailwind compilado (no editar a mano)
   css/input.css            Fuente de Tailwind + utilidades custom
+  css/fonts.css            @font-face de Barlow / Barlow Condensed
+  fonts/*.woff2            Tipografía autoalojada (offline)
   vendor/chart.umd.min.js  Chart.js 4.4.7 fijado
   images/*.webp            Ilustraciones optimizadas
 js/
-  app.js                   Router SPA, tema, timer UI, auto-sync, SW
+  app.js                   Router SPA con historial, tema, timer UI, sync, instalación, SW
   state.js                 Estado global y sesión activa
   config.js                URL Convex, versión, unidad, logger
   data/initialData.js      Rutinas, nutrición y perfil por defecto
@@ -73,14 +81,15 @@ js/
     merge.js               Merge puro y testeable
     timer.js               Temporizador resiliente
   modules/
-    workout.js             Controlador del entreno
+    workout.js             Controlador del entreno + racha semanal
     workout-render.js      Plantillas del entreno
     workout-utils.js       Helpers compartidos
     nutrition.js           Guía + seguimiento diario
-    analytics.js           Gráficas y mediciones
+    analytics.js           Gráficas accesibles, vista barras/tendencia y mediciones
     settings.js            Perfil, clave, sync, backup
   utils/escape.js          Escape HTML / URLs seguras
-  ui/toast.js              Toasts + confirmaciones accesibles
+  ui/toast.js              Toasts, confirmaciones y pila de modales para “atrás”
+  ui/icons.js              Set Lucide (SVG) compartido
 convex/
   schema.ts                Tablas e índices
   lib/auth.ts              Validación de la clave
@@ -148,14 +157,16 @@ Esto evita dos fallos clásicos: pisar cambios offline con una nube vieja y resu
 - `node:test` para merge, normalización, tombstones y escape.
 - ESLint flat config.
 - GitHub Actions: lint, tests y verificación de que el CSS compilado esté actualizado.
+- Lighthouse **100/100/100** (accesibilidad, buenas prácticas, SEO) en tema claro y oscuro.
 - Sin frameworks ni build de JS: módulos ES nativos, fáciles de inspeccionar y cachear.
 
 ---
 
 ## 📱 Instalación
 
-- **Android / Chrome:** abrir la URL, menú ⋮ → “Instalar aplicación”.
+- **Android / Chrome:** abrir la URL, menú ⋮ → “Instalar aplicación”, o usar el banner “Instala Kinetix”.
 - **iPhone / Safari:** Compartir → “Agregar a pantalla de inicio”.
+- El banner se puede posponer y no vuelve a aparecer durante 30 días.
 
 ---
 

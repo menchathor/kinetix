@@ -1,12 +1,19 @@
 // Service Worker para Kinetix PWA (offline real, sin CDNs en runtime)
-const CACHE_NAME = 'kinetix-v1.17';
+const CACHE_NAME = 'kinetix-v1.18';
 const CACHE_PREFIX = 'kinetix-';
 
 const CODE_ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './assets/css/fonts.css',
   './assets/css/tailwind.css',
+  './assets/fonts/barlow-400.woff2',
+  './assets/fonts/barlow-500.woff2',
+  './assets/fonts/barlow-600.woff2',
+  './assets/fonts/barlow-700.woff2',
+  './assets/fonts/barlow-condensed-600.woff2',
+  './assets/fonts/barlow-condensed-700.woff2',
   './assets/vendor/chart.umd.min.js',
   './assets/icons/icon.svg',
   './assets/icons/icon-192.png',
@@ -16,6 +23,7 @@ const CODE_ASSETS = [
   './js/state.js',
   './js/utils/escape.js',
   './js/ui/toast.js',
+  './js/ui/icons.js',
   './js/data/initialData.js',
   './js/services/convex.js',
   './js/services/db.js',

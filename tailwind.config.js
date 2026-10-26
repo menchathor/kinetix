@@ -12,7 +12,15 @@ export default {
         xs: '360px'
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif']
+        // Barlow se autoaloja en assets/fonts (funciona offline).
+        sans: ['Barlow', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        display: ['Barlow Condensed', 'Barlow', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif']
+      },
+      minHeight: {
+        11: '2.75rem'
+      },
+      minWidth: {
+        11: '2.75rem'
       }
     }
   },

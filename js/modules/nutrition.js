@@ -3,6 +3,7 @@
 import { INITIAL_DATA } from '../data/initialData.js';
 import { db } from '../services/db.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
+import { icon } from '../ui/icons.js';
 
 function formatWater(ml) {
   return `${(Number(ml) / 1000).toFixed(2)} L`;
@@ -62,15 +63,15 @@ export function renderNutritionModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-sm font-bold text-[var(--foreground)]">Seguimiento de Hoy</h3>
-          <span id="nutritionSaveState" class="text-[10px] font-semibold text-emerald-400 opacity-0 transition-opacity">✓ Guardado</span>
+          <span id="nutritionSaveState" class="text-[11px] font-semibold text-emerald-500 opacity-0 transition-opacity inline-flex items-center gap-1">${icon('check', 'w-3.5 h-3.5')} Guardado</span>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <!-- Medicación -->
           <label class="flex items-start gap-2.5 p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] cursor-pointer">
-            <input id="medicationToggle" type="checkbox" ${today.medicationTaken ? 'checked' : ''} class="mt-0.5 h-4 w-4 accent-emerald-500" />
+            <input id="medicationToggle" type="checkbox" ${today.medicationTaken ? 'checked' : ''} class="mt-0.5 h-5 w-5 accent-emerald-500" />
             <span>
-              <span class="text-xs font-bold text-[var(--foreground)] block">Levotiroxina en ayunas</span>
+              <span class="text-[13px] font-bold text-[var(--foreground)] block">Levotiroxina en ayunas</span>
               <span class="text-[10px] text-[var(--muted-foreground)] block">06:30 – 07:00 • con 250-300 ml de agua</span>
               ${today.medicationTaken && today.medicationTime ? `<span class="text-[10px] text-emerald-400 font-bold block mt-1">Registrada ${escapeHtml(today.medicationTime)}</span>` : ''}
             </span>
@@ -79,16 +80,16 @@ export function renderNutritionModule(container) {
           <!-- Hidratación -->
           <div class="p-3 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-bold text-[var(--foreground)]">💧 Hidratación</span>
+              <span class="text-xs font-bold text-[var(--foreground)] inline-flex items-center gap-1.5">${icon('droplet', 'w-4 h-4 text-blue-500')} Hidratación</span>
               <span id="waterLabel" class="text-[11px] font-mono font-bold text-blue-400">${formatWater(today.waterMl)} / ${formatWater(goal)}</span>
             </div>
             <div class="w-full h-2 bg-[var(--border)] rounded-full overflow-hidden mt-2">
               <div id="waterBar" class="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all" style="width: ${waterPercent}%"></div>
             </div>
             <div class="flex items-center gap-1.5 mt-2">
-              <button type="button" id="btnWaterMinus" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--accent)]" aria-label="Restar 250 ml de agua">−250</button>
-              <button type="button" id="btnWaterPlus" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 250 ml de agua">+250</button>
-              <button type="button" id="btnWaterPlus500" class="flex-1 text-xs font-bold py-1.5 rounded-lg bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 500 ml de agua">+500</button>
+              <button type="button" id="btnWaterMinus" class="btn-touch flex-1 text-xs font-bold rounded-lg bg-[var(--card)] border border-[var(--border)] hover:bg-[var(--accent)]" aria-label="Restar 250 ml de agua">−250</button>
+              <button type="button" id="btnWaterPlus" class="btn-touch flex-1 text-xs font-bold rounded-lg bg-blue-500/15 text-blue-500 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 250 ml de agua">+250</button>
+              <button type="button" id="btnWaterPlus500" class="btn-touch flex-1 text-xs font-bold rounded-lg bg-blue-500/15 text-blue-500 border border-blue-500/30 hover:bg-blue-500/25" aria-label="Sumar 500 ml de agua">+500</button>
             </div>
           </div>
         </div>
@@ -104,7 +105,7 @@ export function renderNutritionModule(container) {
           <div>
             <div class="flex items-center justify-between gap-2 mb-2">
               <div class="flex items-center gap-2">
-                <span class="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 flex items-center justify-center text-base">💊</span>
+                <span class="w-9 h-9 rounded-xl bg-purple-500/10 text-purple-500 border border-purple-500/20 flex items-center justify-center">${icon('pill', 'w-5 h-5')}</span>
                 <div>
                   <h3 class="font-bold text-xs sm:text-sm text-[var(--foreground)]">Protocolo Levotiroxina</h3>
                   <span class="text-[10px] font-mono text-purple-400 font-bold">06:30 – 07:00 hrs</span>
@@ -112,7 +113,7 @@ export function renderNutritionModule(container) {
               </div>
               <span class="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold">Absorción &gt;85%</span>
             </div>
-            <ul class="space-y-1.5 text-xs text-[var(--muted-foreground)] mt-2">
+            <ul class="space-y-1.5 text-[13px] text-[var(--muted-foreground)] mt-2">
               <li class="flex items-start gap-1.5">
                 <span class="text-purple-400 font-bold">•</span>
                 <span>Ingerir en ayunas únicamente con <b>250–300 ml de agua pura</b>.</span>
@@ -133,7 +134,7 @@ export function renderNutritionModule(container) {
           <div>
             <div class="flex items-center justify-between gap-2 mb-2">
               <div class="flex items-center gap-2">
-                <span class="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center text-base">💧</span>
+                <span class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-500 border border-blue-500/20 flex items-center justify-center">${icon('droplet', 'w-5 h-5')}</span>
                 <div>
                   <h3 class="font-bold text-xs sm:text-sm text-[var(--foreground)]">Pauta de Hidratación</h3>
                   <span class="text-[10px] font-mono text-blue-400 font-bold">Meta: ${(goal / 1000).toFixed(1)} L / día</span>
@@ -141,7 +142,7 @@ export function renderNutritionModule(container) {
               </div>
               <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">Distribución</span>
             </div>
-            <ul class="space-y-1.5 text-xs text-[var(--muted-foreground)] mt-2">
+            <ul class="space-y-1.5 text-[13px] text-[var(--muted-foreground)] mt-2">
               <li class="flex items-start gap-1.5">
                 <span class="text-blue-400 font-bold">•</span>
                 <span><b>Mañana (07:00 – 12:00):</b> ~1.0 L (incluye vaso de ayuno + media mañana).</span>
@@ -180,28 +181,29 @@ export function renderNutritionModule(container) {
                   <h4 class="font-bold text-sm text-[var(--foreground)]">${escapeHtml(meal.name)}</h4>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
-                    🎯 ${escapeHtml(meal.badge)}
+                  <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold inline-flex items-center gap-1">
+                    ${icon('target', 'w-3.5 h-3.5')} ${escapeHtml(meal.badge)}
                   </span>
-                  <label class="flex items-center gap-1 text-[10px] font-bold text-[var(--muted-foreground)] cursor-pointer">
-                    <input type="checkbox" class="meal-toggle h-4 w-4 accent-emerald-500" data-meal="${escapeAttr(meal.id)}" ${done ? 'checked' : ''} />
+                  <label class="flex items-center gap-1.5 min-h-11 text-[11px] font-bold text-[var(--muted-foreground)] cursor-pointer px-1">
+                    <input type="checkbox" class="meal-toggle h-5 w-5 accent-emerald-500" data-meal="${escapeAttr(meal.id)}" ${done ? 'checked' : ''} />
                     <span>Hecha</span>
                   </label>
                 </div>
               </div>
 
-              <ul class="mt-3 space-y-2 text-xs text-[var(--foreground)]/90">
+              <ul class="mt-3 space-y-2 text-[13px] text-[var(--foreground)]/90">
                 ${meal.items.map(item => `
                   <li class="flex items-start gap-2">
-                    <span class="text-amber-500 font-bold mt-0.5">▸</span>
+                    <span class="text-amber-500 mt-1 shrink-0">${icon('chevron-right', 'w-3.5 h-3.5')}</span>
                     <span class="leading-relaxed">${escapeHtml(item)}</span>
                   </li>
                 `).join('')}
               </ul>
 
               ${meal.notes ? `
-                <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 text-[11px] text-[var(--muted-foreground)] border-l-2 border-amber-500">
-                  💡 <b class="text-[var(--foreground)]">Clave fisiológica:</b> ${escapeHtml(meal.notes)}
+                <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 text-[13px] text-[var(--muted-foreground)] border-l-2 border-amber-500 flex items-start gap-1.5">
+                  <span class="text-amber-500 mt-0.5 shrink-0">${icon('lightbulb', 'w-4 h-4')}</span>
+                  <span><b class="text-[var(--foreground)]">Clave fisiológica:</b> ${escapeHtml(meal.notes)}</span>
                 </div>
               ` : ''}
             </div>
@@ -213,13 +215,13 @@ export function renderNutritionModule(container) {
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs space-y-3">
         <div>
           <h3 class="text-sm font-bold text-[var(--foreground)]">Guía Rápida de Intercambios Equivalentes</h3>
-          <p class="text-xs text-[var(--muted-foreground)]">Opciones intercambiables para variar tus menús manteniendo las calorías y macros exactos</p>
+          <p class="text-[13px] text-[var(--muted-foreground)]">Opciones intercambiables para variar tus menús manteniendo las calorías y macros exactos</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
-            <span class="text-[11px] font-extrabold text-blue-400 block">🥩 ~35-40g Proteína Magra</span>
-            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+            <span class="text-[12px] font-extrabold text-blue-500 block">🥩 ~35-40g Proteína Magra</span>
+            <ul class="space-y-1 text-[12px] text-[var(--muted-foreground)]">
               <li>• 170-180g Pechuga de pollo o pavo</li>
               <li>• 190g Pescado blanco (merluza/reineta)</li>
               <li>• 150g Salmón o atún al agua (2 latas)</li>
@@ -228,8 +230,8 @@ export function renderNutritionModule(container) {
           </div>
 
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
-            <span class="text-[11px] font-extrabold text-amber-400 block">🍚 ~30-35g Carbohidratos</span>
-            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+            <span class="text-[12px] font-extrabold text-amber-500 block">🍚 ~30-35g Carbohidratos</span>
+            <ul class="space-y-1 text-[12px] text-[var(--muted-foreground)]">
               <li>• 100-120g Arroz o quinoa cocida</li>
               <li>• 150-170g Papa o camote al horno/airfryer</li>
               <li>• 2 rebanadas Pan 100% integral</li>
@@ -238,8 +240,8 @@ export function renderNutritionModule(container) {
           </div>
 
           <div class="p-3 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-1.5">
-            <span class="text-[11px] font-extrabold text-emerald-400 block">🥑 ~10-12g Grasas Saludables</span>
-            <ul class="space-y-1 text-[11px] text-[var(--muted-foreground)]">
+            <span class="text-[12px] font-extrabold text-emerald-500 block">🥑 ~10-12g Grasas Saludables</span>
+            <ul class="space-y-1 text-[12px] text-[var(--muted-foreground)]">
               <li>• 1 cda sopera (10 ml) Aceite de Oliva</li>
               <li>• 1/2 Palta Hass mediana (~70g)</li>
               <li>• 2 huevos enteros (proteína + grasa)</li>
