@@ -24,8 +24,9 @@ function getWeekStart(dateLike) {
   return value;
 }
 
-// Racha semanal: semanas consecutivas con al menos una sesión guardada.
-function computeWeeklyStreak(logs) {
+// Progreso semanal simple: sesiones completadas esta semana frente al
+// número de rutinas de fuerza del programa (4). Sin rachas ni puntos.
+function computeWeeklyProgress(logs) {
   const counts = new Map();
   (logs || []).forEach((log) => {
     const start = getWeekStart(log?.date || log?.startTime || log?.endTime);
@@ -34,46 +35,41 @@ function computeWeeklyStreak(logs) {
     counts.set(key, (counts.get(key) || 0) + 1);
   });
 
-  const weekMs = 7 * 24 * 60 * 60 * 1000;
   const thisWeek = getWeekStart(new Date());
-  const thisWeekKey = thisWeek.getTime();
-  let cursor = thisWeekKey;
-  if (!counts.get(cursor)) cursor -= weekMs;
+  const target = Object.values(INITIAL_DATA.routines || {})
+    .filter(routine => routine && Array.isArray(routine.exercises)).length || 4;
 
-  let weeks = 0;
-  while ((counts.get(cursor) || 0) > 0) {
-    weeks += 1;
-    cursor -= weekMs;
-  }
-
-  const dots = [];
-  for (let i = 6; i >= 0; i -= 1) {
-    dots.push((counts.get(thisWeekKey - i * weekMs) || 0) > 0);
-  }
-
-  return { weeks, currentWeekCount: counts.get(thisWeekKey) || 0, dots };
+  return {
+    sessions: counts.get(thisWeek.getTime()) || 0,
+    target
+  };
 }
 
-function renderWeeklyStreak(streak) {
-  const weekLabel = streak.weeks === 1 ? 'semana' : 'semanas';
-  const sessionLabel = streak.currentWeekCount === 1 ? 'sesión' : 'sesiones';
+function renderWeeklyProgress(progress) {
+  const percent = Math.min(100, Math.round((progress.sessions / progress.target) * 100));
+  const status = progress.sessions === 0
+    ? 'Completa tu primera sesión'
+    : progress.sessions >= progress.target
+      ? 'Objetivo semanal cumplido'
+      : 'Sigue así';
   return `
-    <div class="bg-[var(--card)] rounded-2xl p-3 border border-[var(--border)] shadow-xs flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        <span class="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 border border-amber-500/25 flex items-center justify-center shrink-0">
-          ${icon('flame', 'w-5 h-5')}
-        </span>
-        <div class="min-w-0">
-          <p class="text-[13px] font-bold text-[var(--foreground)] truncate">
-            ${streak.weeks === 0 ? 'Empieza tu racha' : `Racha: ${streak.weeks} ${weekLabel}`}
-          </p>
-          <p class="text-[12px] text-[var(--muted-foreground)] truncate">
-            ${streak.weeks === 0 ? 'Completa tu primera sesión' : `${streak.currentWeekCount} ${sessionLabel} esta semana`}
-          </p>
+    <div class="bg-[var(--card)] rounded-2xl p-3 border border-[var(--border)] shadow-xs">
+      <div class="flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-500 border border-emerald-500/25 flex items-center justify-center shrink-0">
+            ${icon('calendar', 'w-5 h-5')}
+          </span>
+          <div class="min-w-0">
+            <p class="text-[13px] font-bold text-[var(--foreground)] truncate">
+              Semana: ${progress.sessions} de ${progress.target} sesiones
+            </p>
+            <p class="text-[12px] text-[var(--muted-foreground)] truncate">${status}</p>
+          </div>
         </div>
+        <span class="text-[13px] font-bold text-emerald-500 shrink-0">${percent}%</span>
       </div>
-      <div class="flex items-center gap-1 shrink-0" role="img" aria-label="Últimas 7 semanas: ${streak.dots.map(d => d ? 'con sesión' : 'sin sesión').join(', ')}">
-        ${streak.dots.map(active => `<span class="w-2 h-2 rounded-full ${active ? 'bg-emerald-500' : 'bg-[var(--border)]'}"></span>`).join('')}
+      <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden mt-2">
+        <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: ${percent}%"></div>
       </div>
     </div>
   `;
@@ -83,7 +79,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
   const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
   const profile = db.getProfile();
-  const streak = computeWeeklyStreak(db.getWorkoutLogs());
+  const weeklyProgress = computeWeeklyProgress(db.getWorkoutLogs());
   const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const todayName = daysOfWeek[new Date().getDay()];
   const currentDayId = isLive ? state.activeWorkout.routineId : state.selectedDay;
@@ -218,7 +214,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
         </div>
       </div>
 
-      ${!isLive ? renderWeeklyStreak(streak) : ''}
+      ${!isLive ? renderWeeklyProgress(weeklyProgress) : ''}
 
       <!-- ============================================================ -->
       <!-- VISTA MODO PREVIA (NO EN VIVO): Todos los ejercicios en orden -->
@@ -507,11 +503,11 @@ function attachWorkoutEvents(container, currentDayId) {
         const setNumber = ex.sets[setIndex]?.setNumber ?? (setIndex + 1);
         btn.innerHTML = `<span class="text-[10px] font-extrabold leading-none">#${setNumber}</span>${icon(willBeCompleted ? 'check' : 'circle', 'w-5 h-5')}`;
         btn.setAttribute('aria-pressed', String(willBeCompleted));
-        btn.setAttribute('aria-label', `${willBeCompleted ? 'Desmarcar' : 'Marcar'} la serie ${setNumber} como completada`);
+        btn.setAttribute('aria-label', `#${setNumber}: ${willBeCompleted ? 'desmarcar' : 'marcar'} la serie ${setNumber} como completada`);
         const row = btn.closest('.set-row');
         if (willBeCompleted) {
           btn.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500', 'check-pop');
-          btn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
+          btn.classList.remove('bg-[var(--card)]', 'text-[var(--muted-foreground)]', 'hover:bg-[var(--accent)]');
           setTimeout(() => btn.classList.remove('check-pop'), 220);
           if (row) {
             row.classList.add('bg-emerald-500/10', 'border-emerald-500/20');
@@ -519,7 +515,7 @@ function attachWorkoutEvents(container, currentDayId) {
           }
         } else {
           btn.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-sm', 'border-emerald-500');
-          btn.classList.add('bg-[var(--card)]', 'text-[var(--muted-foreground)]');
+          btn.classList.add('bg-[var(--card)]', 'text-[var(--muted-foreground)]', 'hover:bg-[var(--accent)]');
           if (row) {
             row.classList.remove('bg-emerald-500/10', 'border-emerald-500/20');
             row.classList.add('bg-[var(--card)]');

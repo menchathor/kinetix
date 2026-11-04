@@ -361,6 +361,9 @@ export class StorageService {
 
       return {
         date: session.date,
+        startTime: session.startTime,
+        endTime: session.endTime,
+        sessionUpdatedAt: toTimestamp(session.updatedAt) || toTimestamp(session.endTime) || toTimestamp(session.startTime) || toTimestamp(session.date),
         sets: validSets,
         bestSet,
         bestWeight: Number(bestSet.weight) || 0,

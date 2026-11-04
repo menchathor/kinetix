@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.18** — Rediseño de interfaz guiado por UI/UX: Barlow autoalojada, iconos SVG en toda la app, objetivos táctiles de 44 px, tema claro/oscuro con contraste AA, navegación atrás real, estado de sync en cabecera, instalación PWA y gráficas accesibles con vista de tabla y tendencia.
+> **v1.18.1** — Correcciones de uso: las series nuevas arrancan con el último peso y las últimas reps, el botón “Listo” se pinta al instante, Nutrición queda como recordatorio/receta sin checkboxes de comidas y la racha se reemplaza por un progreso semanal simple.
 
 ---
 
@@ -13,6 +13,7 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 - 22 máquinas de fuerza + cardio finisher, con infografías en WebP, ajuste de asiento y claves técnicas.
 - Registro de series, peso (kg/placa) y reps con steppers simétricos y botones `+` / `-` de tamaño consistente.
 - Las series agregadas por error se pueden eliminar con **Deshacer**; las series base de la rutina quedan protegidas.
+- Las series nuevas se precargan con el **último peso y las últimas reps** de esa máquina; si editas un peso objetivo después de esa sesión, ese objetivo manda.
 - Referencia automática de la marca anterior y sugerencia de **sobrecarga progresiva** (“Smart Coach”).
 - Historial editable, duración de sesión y borrado con confirmación.
 
@@ -23,7 +24,7 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 - Iconos SVG (Lucide) en navegación, cabeceras, estados y acciones; sin emojis estructurales.
 - Navegación con historial real: el botón “atrás” cierra modales y vuelve al tab anterior.
 - Indicador de sincronización en la cabecera y banner de instalación PWA.
-- Racha semanal ligera basada en sesiones guardadas.
+- Progreso semanal simple: sesiones completadas de la semana sobre 4, sin rachas ni puntos.
 
 ### Descanso
 - Temporizador flotante con presets, `+15 s`, pausa y barra de progreso.
@@ -32,7 +33,8 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 
 ### Nutrición
 - Macros objetivo, pauta clínica y 4 comidas con equivalencias.
-- Seguimiento diario de **medicación, hidratación y comidas**.
+- Las comidas funcionan como **recordatorio/receta**: sin checkboxes ni registro obligatorio.
+- Seguimiento diario de **medicación e hidratación**.
 - Se sincroniza por día y se restaura en otros dispositivos.
 
 ### Evolución

@@ -2,7 +2,7 @@
 // Incluye seguimiento diario (medicación, agua y comidas) sincronizado.
 import { INITIAL_DATA } from '../data/initialData.js';
 import { db } from '../services/db.js';
-import { escapeHtml, escapeAttr } from '../utils/escape.js';
+import { escapeHtml } from '../utils/escape.js';
 import { icon } from '../ui/icons.js';
 
 function formatWater(ml) {
@@ -15,7 +15,6 @@ export function renderNutritionModule(container) {
   const today = db.getTodayNutrition();
   const goal = Number(nutritionData.targetWaterMl) || 3000;
   const meals = nutritionData.meals.filter(meal => meal.id !== 'medication');
-  const completedMeals = today.completedMeals || {};
   const waterPercent = Math.min(100, Math.round((Number(today.waterMl) || 0) / goal * 100));
 
   container.innerHTML = `
@@ -170,9 +169,8 @@ export function renderNutritionModule(container) {
         </div>
 
         ${meals.map((meal, idx) => {
-          const done = !!completedMeals[meal.id];
           return `
-            <div data-meal-card class="bg-[var(--card)] rounded-2xl p-4 border ${done ? 'border-emerald-500/40' : 'border-[var(--border)]'} shadow-xs transition-colors">
+            <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs transition-colors">
               <div class="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-[var(--border)]/60">
                 <div class="flex items-center gap-2">
                   <span class="text-xs font-mono font-bold px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
@@ -184,10 +182,6 @@ export function renderNutritionModule(container) {
                   <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold inline-flex items-center gap-1">
                     ${icon('target', 'w-3.5 h-3.5')} ${escapeHtml(meal.badge)}
                   </span>
-                  <label class="flex items-center gap-1.5 min-h-11 text-[11px] font-bold text-[var(--muted-foreground)] cursor-pointer px-1">
-                    <input type="checkbox" class="meal-toggle h-5 w-5 accent-emerald-500" data-meal="${escapeAttr(meal.id)}" ${done ? 'checked' : ''} />
-                    <span>Hecha</span>
-                  </label>
                 </div>
               </div>
 
@@ -305,18 +299,4 @@ function attachNutritionEvents(container, today, goal) {
       }
     });
   }
-
-  container.querySelectorAll('.meal-toggle').forEach(toggle => {
-    toggle.addEventListener('change', () => {
-      const mealId = toggle.dataset.meal;
-      if (!today.completedMeals || typeof today.completedMeals !== 'object') today.completedMeals = {};
-      today.completedMeals[mealId] = toggle.checked;
-      persist();
-      const card = toggle.closest('[data-meal-card]');
-      if (card) {
-        card.classList.toggle('border-emerald-500/40', toggle.checked);
-        card.classList.toggle('border-[var(--border)]', !toggle.checked);
-      }
-    });
-  });
 }

@@ -60,6 +60,8 @@ class AppState {
     const routine = INITIAL_DATA.routines[routineId];
     if (!routine) return;
 
+    const customWeightsMeta = db.getCustomWeightsMeta();
+
     // Crear esqueleto de sesión
     this.activeWorkout = {
       id: 'session_' + Date.now(),
@@ -94,10 +96,22 @@ class AppState {
           };
         }
 
-        const customWeight = db.getCustomWeight(ex.id);
-        const suggestedWeight = customWeight !== null
+        const customEntry = customWeightsMeta[ex.id];
+        const customWeight = customEntry ? Number(customEntry.weight) : null;
+        const lastSessionAt = prev?.sessionUpdatedAt || 0;
+        const customIsNewer = customEntry && Number(customEntry.updatedAt) > lastSessionAt;
+        const fallbackBase = (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto') ? '' : ex.baseWeight;
+
+        // Base de hoy: la marca real de la última sesión. Un peso objetivo
+        // editado después de esa sesión sí manda (es una decisión explícita).
+        const suggestedWeight = customIsNewer && customWeight > 0
           ? customWeight
-          : (prev ? prev.bestWeight : (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto' ? '' : ex.baseWeight));
+          : (prev && prev.bestWeight > 0 ? prev.bestWeight : (customWeight > 0 ? customWeight : fallbackBase));
+
+        const defaultReps = String(ex.defaultReps || '8-10');
+        const repsMatch = defaultReps.match(/\d+/);
+        const lowerReps = repsMatch ? repsMatch[0] : '10';
+        const suggestedReps = prev && prev.bestReps > 0 ? prev.bestReps : lowerReps;
 
         // Generar sets por defecto
         const setsCount = ex.defaultSets || 3;
@@ -106,7 +120,7 @@ class AppState {
           sets.push({
             setNumber: i,
             weight: suggestedWeight,
-            reps: ex.defaultReps.includes('-') ? ex.defaultReps.split('-')[0] : ex.defaultReps,
+            reps: suggestedReps,
             completed: false,
             rpe: ''
           });

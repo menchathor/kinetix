@@ -409,7 +409,7 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
           data-ex="${exIndex}"
           data-set="${setIndex}"
           aria-pressed="${isDone}"
-          aria-label="${isDone ? 'Desmarcar' : 'Marcar'} la serie ${setNumber} como completada">
+          aria-label="#${setNumber}: ${isDone ? 'desmarcar' : 'marcar'} la serie ${setNumber} como completada">
           <span class="text-[10px] font-extrabold leading-none">#${setNumber}</span>
           ${isDone ? icon('check', 'w-5 h-5') : icon('circle', 'w-5 h-5')}
         </button>
