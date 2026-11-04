@@ -19,7 +19,9 @@ const DAY_ICONS = {
 
 // 1. Tarjeta de Ejercicio de Fuerza en Modo Previa
 export function renderStaticExerciseCard(ex, exIndex, prevLog) {
-  const customWeight = db.getCustomWeight(ex.id);
+  const customEntry = db.getCustomWeightsMeta()[ex.id];
+  const customIsNewer = customEntry && Number(customEntry.updatedAt) > (prevLog?.sessionUpdatedAt || 0);
+  const customWeight = customIsNewer && Number(customEntry.weight) > 0 ? Number(customEntry.weight) : null;
   const suggestion = db.getProgressiveOverloadSuggestion(ex);
   const displayWeightBadge = customWeight !== null
     ? `Meta: ${customWeight} kg`
