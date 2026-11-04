@@ -160,6 +160,17 @@ export class RestTimer {
     this.notifyTick();
   }
 
+  // Descarta el descanso por completo: cerrar, cancelar o terminar sesión.
+  dismiss() {
+    this.clearTimerInterval();
+    this.endTime = null;
+    this.isRunning = false;
+    this.remainingSeconds = 0;
+    this.releaseWakeLock();
+    this.persist();
+    this.notifyTick();
+  }
+
   addSeconds(secs = 15) {
     this.remainingSeconds += secs;
     this.totalSeconds = Math.max(this.totalSeconds, this.remainingSeconds);

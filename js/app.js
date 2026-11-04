@@ -276,7 +276,7 @@ class App {
     const btnToggle = document.getElementById('btnTimerTogglePlay');
 
     if (btnClose) btnClose.addEventListener('click', () => {
-      timer.stop();
+      timer.dismiss();
       this.timerOverlay.classList.add('hidden');
     });
 

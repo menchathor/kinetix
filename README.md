@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.19** — Smart Coach con doble progresión transparente: exige las series prescritas, muestra la última marca y la nueva base completa (peso × reps), y aplica esa base a las series pendientes y a la próxima sesión. Incluye las correcciones de precarga de marcas, botón “Listo” y Nutrición sin checkboxes de comidas de la v1.18.1.
+> **v1.19.1** — Cierre correcto del temporizador de descanso al cancelar o terminar una sesión, además de Smart Coach con doble progresión transparente, precarga de últimas marcas, botón “Listo” inmediato y Nutrición sin checkboxes de comidas.
 
 ---
 
@@ -29,6 +29,7 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 
 ### Descanso
 - Temporizador flotante con presets, `+15 s`, pausa y barra de progreso.
+- Se descarta por completo al cerrarlo, cancelar o terminar la sesión.
 - Resiste bloqueo de pantalla (timestamp + Wake Lock), se restaura al recargar y notifica al terminar.
 - Audio con Web Audio API, vibración y notificación del sistema cuando la pestaña está oculta.
 

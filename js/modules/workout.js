@@ -12,6 +12,12 @@ import { getExerciseDefinition, restSeconds } from './workout-utils.js';
 
 let undoToastRemove = null;
 
+// El descanso no debe sobrevivir al cierre de la sesión.
+function dismissRestTimer() {
+  timer.dismiss();
+  document.getElementById('floatingTimer')?.classList.add('hidden');
+}
+
 function getWeekStart(dateLike) {
   if (!dateLike) return null;
   const value = typeof dateLike === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateLike)
@@ -372,8 +378,7 @@ function attachWorkoutEvents(container, currentDayId) {
       });
       if (!ok) return;
 
-      timer.stop();
-      timer.releaseWakeLock();
+      dismissRestTimer();
       state.finishWorkout();
       showToast(`¡Excelente trabajo, ${profile.name}! Sesión guardada.`, 'success', 5000);
     });
@@ -391,8 +396,7 @@ function attachWorkoutEvents(container, currentDayId) {
       });
       if (!ok) return;
 
-      timer.stop();
-      timer.releaseWakeLock();
+      dismissRestTimer();
       state.cancelWorkout();
       showToast('Sesión descartada.', 'info');
     });
