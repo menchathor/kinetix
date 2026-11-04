@@ -734,7 +734,10 @@ export class StorageService {
     return this.getCustomWeights();
   }
 
-  // Sugerencia inteligente de sobrecarga progresiva ("Smart Coach")
+  // Sugerencia inteligente de sobrecarga progresiva ("Smart Coach").
+  // Doble progresión: si se completan las series prescritas al peso de
+  // trabajo, todas llegan al mínimo de reps y al menos una al máximo,
+  // se propone subir peso y volver al mínimo de repeticiones.
   getProgressiveOverloadSuggestion(exerciseDef) {
     if (!exerciseDef || exerciseDef.isCardio) return null;
     const exerciseId = exerciseDef.id || exerciseDef.exerciseId;
@@ -743,20 +746,23 @@ export class StorageService {
     const prevLog = this.getLastExerciseLog(exerciseId);
     if (!prevLog || !prevLog.sets || prevLog.sets.length === 0) return null;
 
+    // Si el usuario fijó un peso objetivo después de la última sesión,
+    // respetamos su decisión y no proponemos otra cosa.
+    const customMeta = this.getCustomWeightsMeta()[exerciseId];
+    if (customMeta && Number(customMeta.updatedAt) > (prevLog.sessionUpdatedAt || 0)) return null;
+
     const repsStr = String(exerciseDef.defaultReps || '8-10');
     const parts = repsStr.match(/\d+/g);
     if (!parts || parts.length === 0) return null;
     const minTargetReps = parseInt(parts[0], 10);
     const maxTargetReps = parts.length > 1 ? parseInt(parts[1], 10) : minTargetReps;
 
-    const customW = this.getCustomWeight(exerciseId);
-    const defaultBaseW = Number(exerciseDef.baseWeight) || 0;
-    const currentTargetWeight = customW !== null ? Number(customW) : (prevLog.bestWeight || defaultBaseW);
-
+    const currentTargetWeight = Number(prevLog.bestWeight) || Number(exerciseDef.baseWeight) || 0;
     if (!currentTargetWeight || currentTargetWeight <= 0) return null;
 
+    const targetSets = Number(exerciseDef.defaultSets) || prevLog.sets.length || 3;
     const setsAtTargetWeight = prevLog.sets.filter((set) => set.completed && (Number(set.weight) || 0) >= currentTargetWeight);
-    if (setsAtTargetWeight.length === 0) return null;
+    if (setsAtTargetWeight.length < targetSets) return null;
 
     const bestRepsAtWeight = Math.max(...setsAtTargetWeight.map((set) => Number(set.reps) || 0));
     const allSetsMetMin = setsAtTargetWeight.every((set) => (Number(set.reps) || 0) >= minTargetReps);
@@ -773,12 +779,17 @@ export class StorageService {
       return {
         shouldUpgrade: true,
         exerciseId,
-        previousWeight: prevLog.bestWeight,
+        previousWeight: Number(prevLog.bestWeight) || currentTargetWeight,
         previousReps: bestRepsAtWeight,
         targetRepRange: repsStr,
+        targetSets,
+        completedSets: setsAtTargetWeight.length,
+        minTargetReps,
+        maxTargetReps,
         currentTargetWeight,
         increment,
-        nextWeight
+        nextWeight,
+        nextReps: minTargetReps
       };
     }
 

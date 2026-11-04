@@ -368,7 +368,7 @@ export function renderAnalyticsModule(container) {
                   <span class="text-[10px] font-bold px-2 py-1 rounded-lg ${isClinic ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--accent)] text-[var(--muted-foreground)]'}">
                     ${isClinic ? 'Referencia clínica' : 'Seguimiento diario'}
                   </span>
-                  <button type="button" class="btn-delete-measurement w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">${icon('trash-2', 'w-5 h-5')}</button>
+                  <button type="button" class="btn-delete-measurement w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">${icon('trash-2', 'w-6 h-6')}</button>
                 </div>
               </div>
             `;
@@ -491,7 +491,7 @@ export function renderAnalyticsModule(container) {
               <h3 id="measurementModalTitle" class="text-base font-bold text-[var(--foreground)]">Nueva Medición Corporal</h3>
               <p class="text-[12px] text-[var(--muted-foreground)]">Registra control InBody o pesaje en hogar</p>
             </div>
-            <button id="btnCloseMeasModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-5 h-5')}</button>
+            <button id="btnCloseMeasModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-6 h-6')}</button>
           </div>
 
           <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">

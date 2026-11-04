@@ -62,9 +62,10 @@ export function renderStaticExerciseCard(ex, exIndex, prevLog) {
             <div class="flex items-start sm:items-center gap-2">
               <span class="shrink-0 text-amber-500">${icon('flame', 'w-5 h-5')}</span>
               <div class="leading-tight">
-                <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Sobrecarga Progresiva</span>
-                <span class="text-[12px] text-[var(--muted-foreground)]">
-                  Dominaste <b>${suggestion.previousWeight} kg × ${suggestion.previousReps} reps</b> (tope de ${suggestion.targetRepRange}). Sugerido: <b class="text-emerald-500">${suggestion.nextWeight} kg</b> (+${suggestion.increment} kg).
+                <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Doble progresión</span>
+                <span class="text-[12px] text-[var(--muted-foreground)] leading-relaxed block">
+                  Última sesión: <b>${suggestion.previousWeight} kg</b> en <b>${suggestion.completedSets} series</b> · mejor serie <b>${suggestion.previousReps} reps</b> · rango ${suggestion.targetRepRange}.
+                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} kg × ${suggestion.nextReps} reps</b> (+${suggestion.increment} kg).
                 </span>
               </div>
             </div>
@@ -72,8 +73,9 @@ export function renderStaticExerciseCard(ex, exIndex, prevLog) {
               type="button" 
               class="btn-apply-smart-coach btn-touch shrink-0 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[12px] shadow-xs transition-all inline-flex items-center justify-center gap-1.5"
               data-id="${escapeAttr(ex.id)}"
-              data-weight="${suggestion.nextWeight}">
-              ${icon('zap', 'w-4 h-4')} Subir a ${suggestion.nextWeight} kg
+              data-weight="${suggestion.nextWeight}"
+              data-reps="${suggestion.nextReps}">
+              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} kg × ${suggestion.nextReps} reps
             </button>
           </div>
         ` : ''}
@@ -164,8 +166,9 @@ export function renderStaticCardioCard(ex, exIndex) {
 // 3. Tarjeta de Ejercicio de Fuerza en Vivo (Pendiente)
 export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
   const suggestion = db.getProgressiveOverloadSuggestion({ ...def, id: ex.exerciseId });
-  const currentSetWeight = Number(ex.sets?.[0]?.weight) || 0;
-  const showSuggestion = suggestion && suggestion.shouldUpgrade && currentSetWeight < suggestion.nextWeight;
+  const pendingSets = (ex.sets || []).filter(set => !set.completed);
+  const showSuggestion = suggestion && suggestion.shouldUpgrade && pendingSets.length > 0
+    && pendingSets.some(set => (Number(set.weight) || 0) < suggestion.nextWeight);
   const baseSets = Number(def?.defaultSets) || ex.sets.length;
 
   return `
@@ -205,9 +208,10 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
             <div class="flex items-start sm:items-center gap-2">
               <span class="shrink-0 text-amber-500">${icon('flame', 'w-5 h-5')}</span>
               <div class="leading-tight">
-                <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Subida de Placa Sugerida</span>
-                <span class="text-[12px] text-[var(--muted-foreground)]">
-                  Lograste <b>${suggestion.previousWeight} kg × ${suggestion.previousReps} reps</b>. ¿Aplicar <b class="text-emerald-500">${suggestion.nextWeight} kg</b> (+${suggestion.increment} kg) a tus series de hoy?
+                <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Nueva base</span>
+                <span class="text-[12px] text-[var(--muted-foreground)] leading-relaxed block">
+                  Última sesión: <b>${suggestion.previousWeight} kg</b> en ${suggestion.completedSets} series · mejor serie ${suggestion.previousReps} reps (rango ${suggestion.targetRepRange}).
+                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} kg × ${suggestion.nextReps} reps</b> (+${suggestion.increment} kg). ¿Aplicarla a las series restantes?
                 </span>
               </div>
             </div>
@@ -216,8 +220,9 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
               class="btn-apply-smart-coach btn-touch shrink-0 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[12px] shadow-xs transition-all inline-flex items-center justify-center gap-1.5"
               data-id="${escapeAttr(ex.exerciseId)}"
               data-ex="${exIndex}"
-              data-weight="${suggestion.nextWeight}">
-              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} kg
+              data-weight="${suggestion.nextWeight}"
+              data-reps="${suggestion.nextReps}">
+              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} kg × ${suggestion.nextReps} reps
             </button>
           </div>
         ` : ''}
@@ -425,7 +430,7 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
             data-ex="${exIndex}"
             data-set="${setIndex}"
             aria-label="Eliminar la serie agregada ${setNumber}"
-            title="Eliminar serie agregada">${icon('trash-2', 'w-5 h-5')}</button>
+            title="Eliminar serie agregada">${icon('trash-2', 'w-6 h-6')}</button>
         </div>
       ` : ''}
     </div>

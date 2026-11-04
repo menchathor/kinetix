@@ -100,18 +100,22 @@ class AppState {
         const customWeight = customEntry ? Number(customEntry.weight) : null;
         const lastSessionAt = prev?.sessionUpdatedAt || 0;
         const customIsNewer = customEntry && Number(customEntry.updatedAt) > lastSessionAt;
+        const useCustomTarget = customIsNewer && customWeight > 0;
         const fallbackBase = (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto') ? '' : ex.baseWeight;
 
         // Base de hoy: la marca real de la última sesión. Un peso objetivo
-        // editado después de esa sesión sí manda (es una decisión explícita).
-        const suggestedWeight = customIsNewer && customWeight > 0
+        // editado después de esa sesión sí manda (es una decisión explícita)
+        // y vuelve a la parte baja del rango de reps.
+        const suggestedWeight = useCustomTarget
           ? customWeight
           : (prev && prev.bestWeight > 0 ? prev.bestWeight : (customWeight > 0 ? customWeight : fallbackBase));
 
         const defaultReps = String(ex.defaultReps || '8-10');
         const repsMatch = defaultReps.match(/\d+/);
         const lowerReps = repsMatch ? repsMatch[0] : '10';
-        const suggestedReps = prev && prev.bestReps > 0 ? prev.bestReps : lowerReps;
+        const suggestedReps = useCustomTarget
+          ? lowerReps
+          : (prev && prev.bestReps > 0 ? prev.bestReps : lowerReps);
 
         // Generar sets por defecto
         const setsCount = ex.defaultSets || 3;

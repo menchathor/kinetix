@@ -220,20 +220,20 @@
           <h1 class="text-base font-bold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
             <span id="appTitleHeader">Kinetix</span>
             <span id="headerGymTime" class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
-            <span id="headerVersionBadge" class="hidden xs:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.18.1</span>
+            <span id="headerVersionBadge" class="hidden min-[390px]:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.19</span>
           </h1>
           <p id="headerSubtitle" class="text-[11px] text-[var(--muted-foreground)] truncate">Recomposición Corporal • 72-74 kg</p>
         </div>
       </div>
 
       <!-- Acciones: estado de sync, tema y avatar -->
-      <div class="flex items-center gap-1.5 shrink-0">
+      <div class="flex items-center gap-2 shrink-0">
         <button id="headerSyncStatus" type="button" class="relative w-11 h-11 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center shadow-xs hover:bg-[var(--border)] transition-colors" title="Estado de sincronización" aria-label="Estado de sincronización: en línea">
-          <span id="headerSyncIcon" data-icon="cloud" aria-hidden="true"></span>
+          <span id="headerSyncIcon" data-icon="cloud" data-icon-class="w-6 h-6" aria-hidden="true"></span>
           <span id="headerSyncDot" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[var(--accent)]" aria-hidden="true"></span>
         </button>
         <button id="btnThemeToggle" class="w-11 h-11 rounded-xl bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] flex items-center justify-center shadow-xs hover:bg-[var(--border)] transition-colors" title="Cambiar Modo Claro / Oscuro" aria-label="Cambiar entre modo claro y oscuro">
-          <span id="themeIcon" data-icon="moon" aria-hidden="true"></span>
+          <span id="themeIcon" data-icon="moon" data-icon-class="w-6 h-6" aria-hidden="true"></span>
         </button>
         <div class="hidden xs:flex w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 to-emerald-500 text-slate-950 font-extrabold text-xs items-center justify-center shadow-xs" aria-hidden="true">
           MM
@@ -257,13 +257,13 @@
         </span>
         <span class="text-[11px] uppercase font-bold text-amber-500">Descanso</span>
       </div>
-      <div class="flex items-center gap-1">
+      <div class="flex items-center gap-2">
         <button id="btnTimerAdd15" class="text-[11px] font-mono font-bold h-11 min-w-11 px-2 rounded-lg bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)]" title="Sumar 15 segundos" aria-label="+15s: sumar 15 segundos al descanso">+15s</button>
         <button id="btnTimerTogglePlay" class="w-11 h-11 rounded-lg bg-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--border)] flex items-center justify-center" aria-label="Pausar o reanudar el descanso">
-          <span data-icon="pause" aria-hidden="true"></span>
+          <span data-icon="pause" data-icon-class="w-6 h-6" aria-hidden="true"></span>
         </button>
         <button id="btnTimerClose" class="w-11 h-11 rounded-lg text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center" aria-label="Cerrar el temporizador">
-          <span data-icon="x" aria-hidden="true"></span>
+          <span data-icon="x" data-icon-class="w-6 h-6" aria-hidden="true"></span>
         </button>
       </div>
     </div>
@@ -311,6 +311,6 @@
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.18.1"></script>
+  <script type="module" src="./js/app.js?v=1.19"></script>
 </body>
 </html>

@@ -153,7 +153,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
                 ${icon('check', 'w-4 h-4')} Terminar
               </button>
               <button id="btnCancelWorkout" class="btn-touch w-11 text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all inline-flex items-center justify-center" title="Descartar" aria-label="Descartar sesión">
-                ${icon('x', 'w-5 h-5')}
+                ${icon('x', 'w-6 h-6')}
               </button>
             </div>
           </div>
@@ -403,6 +403,7 @@ function attachWorkoutEvents(container, currentDayId) {
     btn.addEventListener('click', () => {
       const exerciseId = btn.getAttribute('data-id');
       const nextWeight = parseFloat(btn.getAttribute('data-weight'));
+      const nextReps = parseFloat(btn.getAttribute('data-reps'));
       const exIndexAttr = btn.getAttribute('data-ex');
 
       if (exerciseId && !isNaN(nextWeight)) {
@@ -416,6 +417,7 @@ function attachWorkoutEvents(container, currentDayId) {
             liveEx.sets.forEach(s => {
               if (!s.completed) {
                 s.weight = nextWeight;
+                if (!isNaN(nextReps)) s.reps = nextReps;
               }
             });
             db.saveActiveSession(state.activeWorkout);
@@ -423,6 +425,10 @@ function attachWorkoutEvents(container, currentDayId) {
         }
 
         renderWorkoutModule(container, true);
+        showToast(
+          `Nueva base: ${nextWeight} kg${!isNaN(nextReps) ? ` × ${nextReps} reps` : ''}.`,
+          'success'
+        );
       }
     });
   });

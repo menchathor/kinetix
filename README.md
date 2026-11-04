@@ -2,7 +2,7 @@
 
 PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento de fuerza en máquinas, descanso activo, nutrición y evolución corporal.
 
-> **v1.18.1** — Correcciones de uso: las series nuevas arrancan con el último peso y las últimas reps, el botón “Listo” se pinta al instante, Nutrición queda como recordatorio/receta sin checkboxes de comidas y la racha se reemplaza por un progreso semanal simple.
+> **v1.19** — Smart Coach con doble progresión transparente: exige las series prescritas, muestra la última marca y la nueva base completa (peso × reps), y aplica esa base a las series pendientes y a la próxima sesión. Incluye las correcciones de precarga de marcas, botón “Listo” y Nutrición sin checkboxes de comidas de la v1.18.1.
 
 ---
 
@@ -13,8 +13,9 @@ PWA **local-first**, *mobile-first* y offline para seguimiento de entrenamiento 
 - 22 máquinas de fuerza + cardio finisher, con infografías en WebP, ajuste de asiento y claves técnicas.
 - Registro de series, peso (kg/placa) y reps con steppers simétricos y botones `+` / `-` de tamaño consistente.
 - Las series agregadas por error se pueden eliminar con **Deshacer**; las series base de la rutina quedan protegidas.
-- Las series nuevas se precargan con el **último peso y las últimas reps** de esa máquina; si editas un peso objetivo después de esa sesión, ese objetivo manda.
-- Referencia automática de la marca anterior y sugerencia de **sobrecarga progresiva** (“Smart Coach”).
+- Las series nuevas se precargan con el **último peso y las últimas reps** de esa máquina; si editas un peso objetivo después de esa sesión, ese objetivo manda y vuelve al mínimo de reps.
+- **Smart Coach (doble progresión)**: exige completar las series prescritas al mismo peso, que todas lleguen al mínimo de reps y al menos una al máximo. Entonces propone +2.5 kg (aislados) o +5 kg (compuestos) y vuelve al mínimo de reps.
+- La sugerencia muestra la última marca y la nueva base `peso × reps`; al aplicarla se actualizan las series pendientes y la próxima sesión.
 - Historial editable, duración de sesión y borrado con confirmación.
 
 ### Interfaz

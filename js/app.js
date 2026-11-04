@@ -137,7 +137,7 @@ class App {
 
   updateThemeIcon(isDark) {
     const iconEl = document.getElementById('themeIcon');
-    if (iconEl) iconEl.innerHTML = icon(isDark ? 'sun' : 'moon');
+    if (iconEl) iconEl.innerHTML = icon(isDark ? 'sun' : 'moon', 'w-6 h-6');
   }
 
   setupHeaderStatus() {
@@ -161,7 +161,7 @@ class App {
     const hasKey = convex.hasSyncKey();
     iconEl.innerHTML = icon(
       this.isSyncing ? 'loader' : (online ? 'cloud' : 'cloud-off'),
-      this.isSyncing ? 'w-5 h-5 animate-spin' : 'w-5 h-5'
+      this.isSyncing ? 'w-6 h-6 animate-spin' : 'w-6 h-6'
     );
 
     if (dot) dot.classList.toggle('hidden', online && hasKey);
@@ -178,7 +178,7 @@ class App {
     const profile = db.getProfile();
     const subtitle = document.getElementById('headerSubtitle');
     if (subtitle) {
-      subtitle.innerHTML = `Recomposición Corporal<span class="hidden xs:inline"> • ${escapeHtml(profile.targetWeightMin)}-${escapeHtml(profile.targetWeightMax)} kg</span>`;
+      subtitle.innerHTML = `Recomposición Corporal<span class="hidden min-[430px]:inline"> • ${escapeHtml(profile.targetWeightMin)}-${escapeHtml(profile.targetWeightMax)} kg</span>`;
     }
 
     const gymTime = document.getElementById('headerGymTime');
@@ -256,7 +256,7 @@ class App {
       if (timeDisplay) timeDisplay.textContent = formatted;
       if (progressBar) progressBar.style.width = `${progress}%`;
       if (toggleBtn) {
-        toggleBtn.innerHTML = icon(isRunning ? 'pause' : 'play');
+        toggleBtn.innerHTML = icon(isRunning ? 'pause' : 'play', 'w-6 h-6');
         toggleBtn.setAttribute('aria-label', isRunning ? 'Pausar el descanso' : 'Reanudar el descanso');
       }
     });
@@ -329,7 +329,7 @@ class App {
         </div>
         <button type="button" id="btnInstallPwa" class="btn-touch px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold">Instalar</button>
         <button type="button" id="btnDismissInstall" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:bg-[var(--accent)] flex items-center justify-center" aria-label="Ahora no">
-          ${icon('x')}
+          ${icon('x', 'w-6 h-6')}
         </button>
       </div>
     `;
