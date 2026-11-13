@@ -1,5 +1,9 @@
 // Módulo de Evolución, Gráficas de Sobrecarga Progresiva y Mediciones Corporales
+import { INITIAL_DATA } from '../data/initialData.js';
+import { CONFIG } from '../config.js';
 import { db, formatDisplayDate } from '../services/db.js';
+import { computeComposition, buildMonthlyWeightSeries, computeSessionVolume, isInBodySource } from '../services/analytics-calc.js';
+import { parseBaseWeight } from '../services/overload.js';
 import { escapeHtml, escapeAttr, toNumber } from '../utils/escape.js';
 import { showToast, confirmAction, pushModalHistory } from '../ui/toast.js';
 import { icon } from '../ui/icons.js';
@@ -8,62 +12,8 @@ let weightChartInstance = null;
 let exerciseChartInstance = null;
 let analyticsEscapeHandler = null;
 let analyticsModalHistory = null;
+let sessionModalHistory = null;
 let weightChartView = 'bars';
-
-function sortedAscending(measurements) {
-  return [...measurements]
-    .filter(measurement => measurement && measurement.date)
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function computeComposition(measurements, profile) {
-  const sorted = sortedAscending(measurements);
-  const inbody = sorted.filter(m => String(m.source || '').toLowerCase().includes('inbody'));
-  const first = inbody[0] || sorted[0] || null;
-  const last = inbody[inbody.length - 1] || sorted[sorted.length - 1] || null;
-
-  const currentWeight = toNumber(last?.weight ?? last?.weightKg ?? profile.currentWeight);
-  const startWeight = toNumber(first?.weight ?? first?.weightKg ?? profile.startWeight) || currentWeight;
-  const weightDiff = startWeight > 0 && currentWeight > 0
-    ? Math.round((currentWeight - startWeight) * 10) / 10
-    : null;
-
-  const fatFreeMass = toNumber(last?.fatFreeMass ?? profile.fatFreeMass);
-  const visceralFat = toNumber(last?.visceralFat ?? profile.visceralFat);
-  const hasComparison = Boolean(first && last && first.date !== last.date);
-
-  const startFat = toNumber(first?.fatMassKg ?? first?.fatMass);
-  const endFat = toNumber(last?.fatMassKg ?? last?.fatMass);
-  const weightLost = startWeight > 0 && currentWeight > 0 ? Math.round((startWeight - currentWeight) * 10) / 10 : 0;
-  const fatLost = startFat > 0 && endFat >= 0 ? Math.round((startFat - endFat) * 10) / 10 : 0;
-  const pureFatPercent = weightLost > 0 && fatLost > 0 ? Math.round((fatLost / weightLost) * 100) : null;
-
-  return {
-    sorted,
-    first,
-    last,
-    hasComparison,
-    currentWeight,
-    startWeight,
-    weightDiff,
-    fatFreeMass,
-    visceralFat,
-    startFat,
-    endFat,
-    weightLost,
-    fatLost,
-    pureFatPercent,
-    startFatPercent: toNumber(first?.bodyFatPercent ?? first?.fatPercent),
-    endFatPercent: toNumber(last?.bodyFatPercent ?? last?.fatPercent),
-    startTrunkFat: toNumber(first?.trunkFat),
-    endTrunkFat: toNumber(last?.trunkFat),
-    startVisceral: toNumber(first?.visceralFat),
-    endVisceral: toNumber(last?.visceralFat),
-    startLean: toNumber(first?.fatFreeMass),
-    endLean: toNumber(last?.fatFreeMass ?? profile.fatFreeMass),
-    bmr: Math.round(toNumber(last?.bmr ?? profile.basalMetabolicRate))
-  };
-}
 
 function displayNumber(value, suffix = '') {
   return value > 0 ? `${value}${suffix}` : '—';
@@ -181,11 +131,18 @@ export function renderAnalyticsModule(container) {
     </div>
   `;
 
+  const fatShareNote = composition.pureFatPercent !== null
+    ? (composition.rawFatPercent > 100
+      ? ` (100%+ grasa: pérdida de grasa mayor que la baja de peso por ganancia magra)`
+      : ` (${composition.pureFatPercent}%)`)
+    : '';
   const synthesis = composition.hasComparison
     ? (composition.weightLost > 0
-      ? `De los <b>${composition.weightLost} kg perdidos</b>, <b>${composition.fatLost > 0 ? composition.fatLost : 0} kg fueron grasa</b>${composition.pureFatPercent !== null ? ` (${composition.pureFatPercent}%)` : ''}. La masa libre de grasa pasó de <b>${composition.startLean || '—'} kg</b> a <b>${composition.endLean || '—'} kg</b>, y la grasa visceral de nivel <b>${composition.startVisceral || '—'}</b> a <b>${composition.endVisceral || '—'}</b>.`
-      : `Tu peso no bajó en este período, pero la composición cambió: grasa de <b>${composition.startFat || '—'} kg</b> a <b>${composition.endFat || '—'} kg</b> y masa libre de grasa de <b>${composition.startLean || '—'} kg</b> a <b>${composition.endLean || '—'} kg</b>.`)
+      ? `De los <b>${composition.weightLost} ${escapeHtml(CONFIG.WEIGHT_UNIT)} perdidos</b>, <b>${composition.fatLost > 0 ? composition.fatLost : 0} ${escapeHtml(CONFIG.WEIGHT_UNIT)} fueron grasa</b>${fatShareNote}. La masa libre de grasa pasó de <b>${composition.startLean || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b> a <b>${composition.endLean || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b>, y la grasa visceral de nivel <b>${composition.startVisceral || '—'}</b> a <b>${composition.endVisceral || '—'}</b>.`
+      : `Tu peso no bajó en este período, pero la composición cambió: grasa de <b>${composition.startFat || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b> a <b>${composition.endFat || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b> y masa libre de grasa de <b>${composition.startLean || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b> a <b>${composition.endLean || '—'} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</b>.`)
     : 'Aún no hay dos controles comparables. La tarjeta se calculará automáticamente cuando registres el siguiente.';
+
+  const selectableRoutines = Object.values(INITIAL_DATA.routines).filter(r => !r.isRestDay);
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -337,7 +294,7 @@ export function renderAnalyticsModule(container) {
           ${measurements.length === 0 ? `
             <div class="p-4 text-center text-xs text-[var(--muted-foreground)]">Todavía no hay mediciones. Usa "+ Nueva medición".</div>
           ` : measurements.map(m => {
-            const isClinic = String(m.source || '').toLowerCase().includes('inbody');
+            const isClinic = isInBodySource(m.source);
             const dateStr = formatDisplayDate(m.date);
             const weight = m.weight !== undefined ? m.weight : m.weightKg;
             const fatPercent = m.fatPercent || m.bodyFatPercent;
@@ -368,7 +325,7 @@ export function renderAnalyticsModule(container) {
                   <span class="text-[10px] font-bold px-2 py-1 rounded-lg ${isClinic ? 'bg-blue-500/10 text-blue-400' : 'bg-[var(--accent)] text-[var(--muted-foreground)]'}">
                     ${isClinic ? 'Referencia clínica' : 'Seguimiento diario'}
                   </span>
-                  <button type="button" class="btn-delete-measurement w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">${icon('trash-2', 'w-6 h-6')}</button>
+                  <button type="button" class="btn-delete-measurement w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(m.date)}" data-source="${escapeAttr(m.source || '')}" aria-label="Eliminar medición del ${escapeAttr(dateStr)}">${icon('trash-2', 'w-6 h-6')}</button>
                 </div>
               </div>
             `;
@@ -395,14 +352,19 @@ export function renderAnalyticsModule(container) {
 
       <!-- HISTORIAL DE SESIONES COMPLETADAS -->
       <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs">
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h3 class="text-sm font-bold text-[var(--foreground)]">Historial de Entrenamientos</h3>
             <p class="text-[13px] text-[var(--muted-foreground)]">Toca una sesión para desplegar el detalle de ejercicios y cargas</p>
           </div>
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
-            ${workoutLogs.length} sesiones
-          </span>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)]">
+              ${workoutLogs.length} sesiones
+            </span>
+            <button type="button" id="btnOpenSessionModal" class="btn-touch bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-3 rounded-xl shadow-xs transition-all">
+              + Registrar sesión
+            </button>
+          </div>
         </div>
 
         <div class="space-y-2.5">
@@ -414,6 +376,7 @@ export function renderAnalyticsModule(container) {
             const strengthExercises = exercisesList.filter(e => !e.isCardio);
             const cardioEx = exercisesList.find(e => e.isCardio);
             const hasCardio = log.cardioDone || (cardioEx && cardioEx.sets && cardioEx.sets.some(s => s.completed));
+            const volumeKg = computeSessionVolume(log);
 
             return `
               <div class="rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] overflow-hidden text-xs transition-all">
@@ -427,7 +390,7 @@ export function renderAnalyticsModule(container) {
                       ${hasCardio ? `<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-500 font-bold inline-flex items-center gap-1">${icon('activity', 'w-3 h-3')} Cardio</span>` : ''}
                     </span>
                     <span class="block text-[12px] text-[var(--muted-foreground)] mt-0.5">
-                      ${strengthExercises.length} máquinas registradas ${log.durationMinutes ? `• ${escapeHtml(log.durationMinutes)} min` : ''}
+                      ${strengthExercises.length} máquinas registradas${log.durationMinutes ? ` • ${escapeHtml(log.durationMinutes)} min` : ''}${volumeKg > 0 ? ` • ${volumeKg.toLocaleString('es-CL')} ${escapeHtml(CONFIG.WEIGHT_UNIT)}` : ''}
                     </span>
                   </span>
 
@@ -468,13 +431,21 @@ export function renderAnalyticsModule(container) {
 
                   <div class="flex items-center justify-between pt-2 border-t border-[var(--border)]/50 gap-2">
                     <span class="text-[10px] font-mono text-[var(--muted-foreground)] truncate">ID: ${escapeHtml(sessionId)}</span>
-                    <button
-                      type="button"
-                      class="btn-delete-workout-session btn-touch text-[11px] font-bold text-rose-500 hover:text-rose-400 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all inline-flex items-center justify-center gap-1.5 shrink-0"
-                      data-session-id="${escapeAttr(sessionId)}"
-                      data-routine-name="${escapeAttr(log.routineName || 'Sesión')}">
-                      ${icon('trash-2', 'w-4 h-4')} Eliminar sesión
-                    </button>
+                    <div class="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        class="btn-edit-workout-session btn-touch text-[11px] font-bold text-amber-500 hover:text-amber-400 px-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 transition-all inline-flex items-center justify-center gap-1.5 shrink-0"
+                        data-session-id="${escapeAttr(sessionId)}">
+                        ${icon('pen-line', 'w-4 h-4')} Editar
+                      </button>
+                      <button
+                        type="button"
+                        class="btn-delete-workout-session btn-touch text-[11px] font-bold text-rose-500 hover:text-rose-400 px-2.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-all inline-flex items-center justify-center gap-1.5 shrink-0"
+                        data-session-id="${escapeAttr(sessionId)}"
+                        data-routine-name="${escapeAttr(log.routineName || 'Sesión')}">
+                        ${icon('trash-2', 'w-4 h-4')} Eliminar sesión
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -484,7 +455,7 @@ export function renderAnalyticsModule(container) {
       </div>
 
       <!-- MODAL NUEVA MEDICIÓN -->
-      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="measurementModalTitle">
+      <div id="modalNewMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="measurementModalTitle">
         <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
           <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
             <div>
@@ -577,6 +548,64 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
+      <!-- MODAL REGISTRAR / EDITAR SESIÓN -->
+      <div id="modalWorkoutSession" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="sessionModalTitle">
+        <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
+          <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+            <div>
+              <h3 id="sessionModalTitle" class="text-base font-bold text-[var(--foreground)]">Registrar Sesión</h3>
+              <p class="text-[12px] text-[var(--muted-foreground)]">Carga retroactiva o edición de cargas y series</p>
+            </div>
+            <button type="button" id="btnCloseSessionModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-6 h-6')}</button>
+          </div>
+
+          <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="inputSessionRoutine" class="font-bold text-[var(--foreground)] block mb-1">Rutina</label>
+                <select id="inputSessionRoutine" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-medium">
+                  ${selectableRoutines.map(r => `<option value="${escapeAttr(r.id)}">${escapeHtml(r.name)}${r.dayName ? ` (${escapeHtml(r.dayName)})` : ''}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label for="inputSessionDate" class="font-bold text-[var(--foreground)] block mb-1">Fecha</label>
+                <input type="date" id="inputSessionDate" value="${new Date().toLocaleDateString('en-CA')}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5 items-center">
+              <div>
+                <label for="inputSessionDuration" class="font-bold text-[var(--foreground)] block mb-1">Duración (min)</label>
+                <input type="number" min="1" id="inputSessionDuration" value="50" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label for="inputSessionCardioMinutes" class="font-bold text-[var(--foreground)] block mb-1">Cardio Zona 2 (min)</label>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="inputSessionCardioDone" checked class="h-5 w-5 accent-emerald-500 shrink-0" aria-label="Incluir cardio" />
+                  <input type="number" min="0" id="inputSessionCardioMinutes" value="20" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+                </div>
+              </div>
+            </div>
+
+            <div id="sessionExercisesEditor" class="space-y-2.5"></div>
+
+            <div>
+              <label for="inputSessionModalNotes" class="font-bold text-[var(--foreground)] block mb-1">Notas de la sesión</label>
+              <input type="text" id="inputSessionModalNotes" placeholder="Sensaciones, energía, equipo..." class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+            <button type="button" id="btnSaveSessionModal" class="btn-touch flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-[13px] transition-all shadow-xs">
+              Guardar sesión
+            </button>
+            <button type="button" id="btnCancelSessionModal" class="btn-touch px-4 rounded-xl border border-[var(--border)] text-[13px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   `;
 
@@ -584,6 +613,64 @@ export function renderAnalyticsModule(container) {
   initWeightChart(measurements, profile, weightChartView);
   const initialExId = container.querySelector('#selectExerciseForChart')?.value || 'chest_press';
   initExerciseChart(workoutLogs, initialExId);
+}
+
+function buildDefaultExercisesForRoutine(routineId) {
+  const routine = INITIAL_DATA.routines[routineId];
+  if (!routine || !Array.isArray(routine.exercises)) return [];
+  const customWeights = db.getCustomWeights();
+
+  return routine.exercises
+    .filter((ex) => !ex.isCardio)
+    .map((ex) => {
+      const prev = db.getLastExerciseLog(ex.id);
+      const baseWeight = Number(customWeights[ex.id] || prev?.bestWeight || parseBaseWeight(ex.baseWeight)) || 0;
+      const defaultReps = parseInt(String(ex.defaultReps || '10').split('-')[0], 10) || 10;
+      const numSets = Math.max(1, Number(ex.defaultSets) || 3);
+      return {
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        isCardio: false,
+        sets: Array.from({ length: numSets }, (_, idx) => ({
+          setNumber: idx + 1,
+          weight: baseWeight,
+          reps: defaultReps,
+          completed: true,
+          rpe: ''
+        }))
+      };
+    });
+}
+
+function renderSessionExercisesEditor(host, exercises) {
+  if (!host) return;
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
+  const strengthExercises = (exercises || []).filter((ex) => !ex.isCardio);
+
+  if (strengthExercises.length === 0) {
+    host.innerHTML = `<p class="text-[11px] text-[var(--muted-foreground)]">Esta rutina no tiene ejercicios de fuerza configurados.</p>`;
+    return;
+  }
+
+  host.innerHTML = strengthExercises.map((ex, exIdx) => `
+    <div class="p-2.5 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] space-y-2" data-session-ex-idx="${exIdx}" data-ex-id="${escapeAttr(ex.exerciseId)}" data-ex-name="${escapeAttr(ex.exerciseName || ex.exerciseId)}" data-ex-notes="${escapeAttr(ex.notes || '')}">
+      <div class="font-bold text-[12px] text-[var(--foreground)]">${escapeHtml(ex.exerciseName || ex.exerciseId)}</div>
+      <div class="space-y-1.5">
+        ${(ex.sets || []).map((set, setIdx) => `
+          <div class="flex items-center gap-1.5" data-session-set-idx="${setIdx}">
+            <span class="text-[10px] font-mono text-[var(--muted-foreground)] shrink-0">#${set.setNumber || setIdx + 1}</span>
+            <input type="number" step="any" min="0" value="${escapeAttr(set.weight ?? 0)}" aria-label="${escapeAttr(ex.exerciseName)} serie ${setIdx + 1} peso (${unit})" class="sess-set-weight w-20 px-2 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono text-center" />
+            <span class="text-[10px] text-[var(--muted-foreground)]">${unit} ×</span>
+            <input type="number" min="0" value="${escapeAttr(set.reps ?? 0)}" aria-label="${escapeAttr(ex.exerciseName)} serie ${setIdx + 1} reps" class="sess-set-reps w-16 px-2 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono text-center" />
+            <label class="flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] ml-auto shrink-0 cursor-pointer">
+              <input type="checkbox" ${set.completed ? 'checked' : ''} class="sess-set-completed h-5 w-5 accent-emerald-500" />
+              <span>OK</span>
+            </label>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
 }
 
 function attachAnalyticsEvents(container) {
@@ -594,12 +681,38 @@ function attachAnalyticsEvents(container) {
   const btnSave = container.querySelector('#btnSaveMeasurement');
   const selectExercise = container.querySelector('#selectExerciseForChart');
 
+  const sessionModal = container.querySelector('#modalWorkoutSession');
+  const btnOpenSession = container.querySelector('#btnOpenSessionModal');
+  const btnCloseSession = container.querySelector('#btnCloseSessionModal');
+  const btnCancelSession = container.querySelector('#btnCancelSessionModal');
+  const btnSaveSession = container.querySelector('#btnSaveSessionModal');
+  const inputSessionRoutine = container.querySelector('#inputSessionRoutine');
+  const inputSessionDate = container.querySelector('#inputSessionDate');
+  const inputSessionDuration = container.querySelector('#inputSessionDuration');
+  const inputSessionCardioDone = container.querySelector('#inputSessionCardioDone');
+  const inputSessionCardioMinutes = container.querySelector('#inputSessionCardioMinutes');
+  const inputSessionNotes = container.querySelector('#inputSessionModalNotes');
+  const sessionEditorHost = container.querySelector('#sessionExercisesEditor');
+  const sessionModalTitle = container.querySelector('#sessionModalTitle');
+
+  let editingSession = null;
+  let lastSessionTrigger = null;
+
   const closeModal = ({ fromPop = false } = {}) => {
     modal?.classList.add('hidden');
     const historyEntry = analyticsModalHistory;
     analyticsModalHistory = null;
     historyEntry?.release({ fromPop });
     btnOpen?.focus();
+  };
+
+  const closeSessionModal = ({ fromPop = false } = {}) => {
+    sessionModal?.classList.add('hidden');
+    const historyEntry = sessionModalHistory;
+    sessionModalHistory = null;
+    historyEntry?.release({ fromPop });
+    (lastSessionTrigger || btnOpenSession)?.focus();
+    editingSession = null;
   };
 
   if (btnOpen && modal) {
@@ -616,11 +729,159 @@ function attachAnalyticsEvents(container) {
       if (event.target === modal) closeModal();
     });
   }
+
+  const openSessionEditor = (existingLog = null, triggerEl = null) => {
+    if (!sessionModal) return;
+    editingSession = existingLog;
+    lastSessionTrigger = triggerEl;
+
+    if (sessionModalTitle) {
+      sessionModalTitle.textContent = existingLog ? 'Editar Sesión' : 'Registrar Sesión';
+    }
+
+    const routineId = existingLog?.routineId && INITIAL_DATA.routines[existingLog.routineId]
+      ? existingLog.routineId
+      : (inputSessionRoutine?.options?.[0]?.value || 'torso1');
+    if (inputSessionRoutine) {
+      inputSessionRoutine.value = routineId;
+      inputSessionRoutine.disabled = Boolean(existingLog);
+    }
+
+    const dateStr = existingLog?.date
+      || (existingLog?.startTime ? existingLog.startTime.slice(0, 10) : '')
+      || new Date().toLocaleDateString('en-CA');
+    if (inputSessionDate) inputSessionDate.value = dateStr;
+    if (inputSessionDuration) inputSessionDuration.value = existingLog?.durationMinutes || 50;
+
+    const existingCardio = existingLog?.exercises?.find((e) => e.isCardio);
+    const hasCardio = existingLog
+      ? Boolean(existingLog.cardioDone || existingCardio?.sets?.some((s) => s.completed))
+      : true;
+    const cardioMins = Number(existingLog?.cardioMinutes ?? existingCardio?.minutes ?? existingCardio?.sets?.[0]?.weight) || 20;
+    if (inputSessionCardioDone) inputSessionCardioDone.checked = hasCardio;
+    if (inputSessionCardioMinutes) inputSessionCardioMinutes.value = hasCardio ? cardioMins : 20;
+    if (inputSessionNotes) inputSessionNotes.value = existingLog?.notes || '';
+
+    const exercises = existingLog
+      ? (existingLog.exercises || [])
+      : buildDefaultExercisesForRoutine(routineId);
+    renderSessionExercisesEditor(sessionEditorHost, exercises);
+
+    sessionModal.classList.remove('hidden');
+    sessionModalHistory = pushModalHistory(() => closeSessionModal({ fromPop: true }));
+    inputSessionDate?.focus();
+  };
+
+  if (btnOpenSession) {
+    btnOpenSession.addEventListener('click', () => openSessionEditor(null, btnOpenSession));
+  }
+  if (inputSessionRoutine) {
+    inputSessionRoutine.addEventListener('change', () => {
+      if (!editingSession) {
+        renderSessionExercisesEditor(sessionEditorHost, buildDefaultExercisesForRoutine(inputSessionRoutine.value));
+      }
+    });
+  }
+  if (btnCloseSession) btnCloseSession.addEventListener('click', closeSessionModal);
+  if (btnCancelSession) btnCancelSession.addEventListener('click', closeSessionModal);
+  if (sessionModal) {
+    sessionModal.addEventListener('click', (event) => {
+      if (event.target === sessionModal) closeSessionModal();
+    });
+  }
+
+  container.querySelectorAll('.btn-edit-workout-session').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const sessionId = btn.getAttribute('data-session-id');
+      const existing = db.getWorkoutLogs().find((log) => log.id === sessionId || log.sessionId === sessionId);
+      if (existing) openSessionEditor(existing, btn);
+    });
+  });
+
+  if (btnSaveSession && sessionModal) {
+    btnSaveSession.addEventListener('click', () => {
+      const routineId = editingSession?.routineId || inputSessionRoutine?.value || 'torso1';
+      const routineDef = INITIAL_DATA.routines[routineId];
+      const dateVal = inputSessionDate?.value || new Date().toLocaleDateString('en-CA');
+      const durationMinutes = Math.max(1, parseInt(inputSessionDuration?.value, 10) || 45);
+      const cardioDone = Boolean(inputSessionCardioDone?.checked);
+      const cardioMinutes = cardioDone ? Math.max(1, parseInt(inputSessionCardioMinutes?.value, 10) || 20) : 0;
+      const notes = inputSessionNotes?.value?.trim() || '';
+
+      const exerciseBoxes = Array.from(sessionEditorHost?.querySelectorAll('[data-session-ex-idx]') || []);
+      const exercises = exerciseBoxes.map((box) => {
+        const setRows = Array.from(box.querySelectorAll('[data-session-set-idx]'));
+        const sets = setRows.map((row, idx) => ({
+          setNumber: idx + 1,
+          weight: Math.max(0, parseFloat(row.querySelector('.sess-set-weight')?.value) || 0),
+          reps: Math.max(0, parseInt(row.querySelector('.sess-set-reps')?.value, 10) || 0),
+          completed: Boolean(row.querySelector('.sess-set-completed')?.checked),
+          rpe: ''
+        }));
+        const exerciseNotes = box.getAttribute('data-ex-notes') || '';
+        return {
+          exerciseId: box.getAttribute('data-ex-id'),
+          exerciseName: box.getAttribute('data-ex-name'),
+          isCardio: false,
+          ...(exerciseNotes ? { notes: exerciseNotes } : {}),
+          sets
+        };
+      });
+
+      const existingCardio = editingSession?.exercises?.find((ex) => ex.isCardio)
+        || routineDef?.exercises?.find((ex) => ex.isCardio);
+      if (cardioDone || existingCardio) {
+        exercises.push({
+          exerciseId: existingCardio?.exerciseId || existingCardio?.id || 'cardio_z2',
+          exerciseName: existingCardio?.exerciseName || existingCardio?.name || 'Caminata en Cinta Inclinada (Zona 2)',
+          isCardio: true,
+          minutes: cardioMinutes,
+          sets: [{
+            setNumber: 1,
+            weight: cardioMinutes,
+            reps: cardioMinutes,
+            completed: cardioDone,
+            rpe: ''
+          }]
+        });
+      }
+
+      const startIso = editingSession?.date === dateVal && editingSession?.startTime
+        ? editingSession.startTime
+        : new Date(`${dateVal}T18:00:00`).toISOString();
+      const endIso = new Date(new Date(startIso).getTime() + durationMinutes * 60000).toISOString();
+
+      db.saveWorkoutSession({
+        id: editingSession?.id || editingSession?.sessionId || `session_${Date.now()}`,
+        routineId,
+        routineName: editingSession?.routineName || routineDef?.name || 'Sesión',
+        date: dateVal,
+        startTime: startIso,
+        endTime: endIso,
+        durationMinutes,
+        cardioDone,
+        cardioMinutes,
+        notes,
+        exercises
+      });
+
+      closeSessionModal();
+      showToast(editingSession ? 'Sesión actualizada.' : 'Sesión registrada.', 'success');
+      renderAnalyticsModule(container);
+    });
+  }
+
   if (analyticsEscapeHandler) {
     document.removeEventListener('keydown', analyticsEscapeHandler);
   }
   analyticsEscapeHandler = (event) => {
-    if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal();
+    if (event.key !== 'Escape') return;
+    if (sessionModal && !sessionModal.classList.contains('hidden')) {
+      closeSessionModal();
+    } else if (modal && !modal.classList.contains('hidden')) {
+      closeModal();
+    }
   };
   document.addEventListener('keydown', analyticsEscapeHandler);
 
@@ -640,7 +901,7 @@ function attachAnalyticsEvents(container) {
       const notes = container.querySelector('#inputMeasNotes')?.value || '';
 
       if (!weight || isNaN(weight)) {
-        showToast('Ingresa un peso válido en kg.', 'warning');
+        showToast(`Ingresa un peso válido en ${CONFIG.WEIGHT_UNIT}.`, 'warning');
         container.querySelector('#inputMeasWeight')?.focus();
         return;
       }
@@ -664,6 +925,7 @@ function attachAnalyticsEvents(container) {
         notes
       });
 
+      closeModal();
       showToast('Medición guardada.', 'success');
       renderAnalyticsModule(container);
     });
@@ -728,6 +990,7 @@ function attachAnalyticsEvents(container) {
   container.querySelectorAll('.btn-delete-measurement').forEach(btn => {
     btn.addEventListener('click', async () => {
       const date = btn.getAttribute('data-date');
+      const source = btn.getAttribute('data-source') || undefined;
       const ok = await confirmAction({
         title: '¿Eliminar esta medición?',
         message: `Se eliminará la medición del ${formatDisplayDate(date)}. La eliminación se sincroniza con la nube.`,
@@ -735,44 +998,11 @@ function attachAnalyticsEvents(container) {
         danger: true
       });
       if (!ok) return;
-      db.deleteMeasurement(date);
+      db.deleteMeasurement(date, source);
       showToast('Medición eliminada.', 'success');
       renderAnalyticsModule(container);
     });
   });
-}
-
-// Agrupa por mes y equipo: la última medición de cada mes para InBody y
-// para báscula hogar. Devuelve null cuando un equipo no midió ese mes.
-function buildMonthlyWeightSeries(measurements) {
-  const monthMap = new Map();
-
-  sortedAscending(measurements).forEach((measurement) => {
-    if (!measurement.date || !/^\d{4}-\d{2}/.test(measurement.date)) return;
-    const weight = Number(measurement.weight) || Number(measurement.weightKg) || 0;
-    if (weight <= 0) return;
-
-    const monthKey = measurement.date.slice(0, 7);
-    const category = String(measurement.source || '').toLowerCase().includes('inbody') ? 'inbody' : 'home';
-    const bucket = monthMap.get(monthKey) || {};
-    const previous = bucket[category];
-
-    if (!previous || measurement.date >= previous.date) {
-      bucket[category] = { ...measurement, weight };
-    }
-    monthMap.set(monthKey, bucket);
-  });
-
-  const keys = Array.from(monthMap.keys()).sort();
-
-  return {
-    keys,
-    labels: keys.map((key) => `${key.slice(5, 7)}/${key.slice(0, 4)}`),
-    inbodyData: keys.map((key) => monthMap.get(key)?.inbody?.weight ?? null),
-    homeData: keys.map((key) => monthMap.get(key)?.home?.weight ?? null),
-    inbodyMeta: keys.map((key) => monthMap.get(key)?.inbody || null),
-    homeMeta: keys.map((key) => monthMap.get(key)?.home || null)
-  };
 }
 
 function initWeightChart(measurements, profile, view = 'bars') {
@@ -828,7 +1058,7 @@ function initWeightChart(measurements, profile, view = 'bars') {
     },
     {
       type: 'bar',
-      label: 'B?scula hogar',
+      label: 'Báscula hogar',
       data: series.homeData,
       backgroundColor: 'rgba(245, 158, 11, 0.78)',
       hoverBackgroundColor: 'rgba(245, 158, 11, 0.95)',
@@ -859,7 +1089,7 @@ function initWeightChart(measurements, profile, view = 'bars') {
     },
     {
       type: 'line',
-      label: 'B?scula hogar',
+      label: 'Báscula hogar',
       data: series.homeData,
       borderColor: '#f59e0b',
       backgroundColor: 'rgba(245, 158, 11, 0.14)',
@@ -881,7 +1111,7 @@ function initWeightChart(measurements, profile, view = 'bars') {
     return `${label}${values.length ? ': ' + values.join(', ') : ': sin dato'}`;
   }).join('; ');
   canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', `Evoluci?n mensual de peso. ${summary}. Rango meta ${targetMin} a ${targetMax} kilogramos.`);
+  canvas.setAttribute('aria-label', `Evolución mensual de peso. ${summary}. Rango meta ${targetMin} a ${targetMax} kilogramos.`);
 
   if (weightChartInstance) weightChartInstance.destroy();
 

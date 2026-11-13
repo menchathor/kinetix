@@ -2,6 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertSyncKey } from "./lib/auth";
 
+function isInBodySource(source?: string): boolean {
+  return String(source || "").toLowerCase().includes("inbody");
+}
+
 // Guardar o actualizar una medición corporal / bioimpedancia
 export const save = mutation({
   args: {
@@ -28,10 +32,12 @@ export const save = mutation({
     assertSyncKey(args.syncKey);
     const { syncKey: _syncKey, ...payload } = args;
 
-    const existing = await ctx.db
+    const candidates = await ctx.db
       .query("measurements")
       .withIndex("by_date", (q) => q.eq("date", payload.date))
-      .first();
+      .collect();
+    const targetIsInBody = isInBodySource(payload.source);
+    const existing = candidates.find((doc) => isInBodySource(doc.source) === targetIsInBody);
 
     const now = Date.now();
 
@@ -64,23 +70,35 @@ export const list = query({
   },
 });
 
-// Eliminar una medición por fecha
+// Eliminar una medición por fecha (y opcionalmente categoría InBody / hogar)
 export const deleteMeasurement = mutation({
   args: {
     syncKey: v.string(),
     date: v.string(),
+    source: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     assertSyncKey(args.syncKey);
-    const existing = await ctx.db
+    const candidates = await ctx.db
       .query("measurements")
       .withIndex("by_date", (q) => q.eq("date", args.date))
-      .first();
+      .collect();
 
-    if (existing) {
-      await ctx.db.delete(existing._id);
-      return true;
+    if (candidates.length === 0) return false;
+
+    if (args.source !== undefined) {
+      const targetIsInBody = isInBodySource(args.source);
+      const match = candidates.find((doc) => isInBodySource(doc.source) === targetIsInBody);
+      if (match) {
+        await ctx.db.delete(match._id);
+        return true;
+      }
+      return false;
     }
-    return false;
+
+    for (const doc of candidates) {
+      await ctx.db.delete(doc._id);
+    }
+    return true;
   },
 });

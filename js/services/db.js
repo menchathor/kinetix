@@ -12,10 +12,13 @@ import {
   normalizeWorkout,
   normalizeMeasurement,
   normalizeCustomWeight,
+  measurementKey,
+  isInBodyMeasurement,
   pruneTombstones,
   workoutVersion,
   toTimestamp
 } from './merge.js';
+import { getProgressiveOverloadSuggestion as computeOverloadSuggestion } from './overload.js';
 
 const KEYS = {
   SETTINGS: 'kinetix_settings',
@@ -27,7 +30,9 @@ const KEYS = {
   PROFILE: 'kinetix_profile',
   TOMBSTONES: 'kinetix_tombstones',
   SEED_FLAG: 'kinetix_seed_version',
-  THEME: 'kinetix_theme'
+  THEME: 'kinetix_theme',
+  SYNC_KEY: 'kinetix_sync_key',
+  PENDING_SYNC: 'kinetix_pending_sync'
 };
 
 const SEED_VERSION = '2';
@@ -87,8 +92,22 @@ function writeJson(key, value) {
 export class StorageService {
   constructor() {
     this.mirrorTimer = null;
+    this.dbPromise = null;
     this.init();
-    this.setupPersistence();
+    this.ready = this.setupPersistence();
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && this.mirrorTimer) {
+          this.flushMirror();
+        }
+      });
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', () => {
+        if (this.mirrorTimer) this.flushMirror();
+      });
+    }
   }
 
   init() {
@@ -139,11 +158,12 @@ export class StorageService {
     } catch {
       // El navegador puede rechazarlo; localStorage sigue funcionando.
     }
-    this.restoreFromMirror().catch(() => {});
+    await this.restoreFromMirror().catch(() => {});
   }
 
   openIDB() {
-    return new Promise((resolve, reject) => {
+    if (this.dbPromise) return this.dbPromise;
+    this.dbPromise = new Promise((resolve, reject) => {
       if (typeof indexedDB === 'undefined') {
         reject(new Error('IndexedDB no disponible'));
         return;
@@ -154,9 +174,19 @@ export class StorageService {
           request.result.createObjectStore(IDB_STORE);
         }
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        database.onclose = () => {
+          this.dbPromise = null;
+        };
+        resolve(database);
+      };
+      request.onerror = () => {
+        this.dbPromise = null;
+        reject(request.error);
+      };
     });
+    return this.dbPromise;
   }
 
   async withStore(mode, callback) {
@@ -180,13 +210,53 @@ export class StorageService {
   scheduleMirror() {
     if (this.mirrorTimer) clearTimeout(this.mirrorTimer);
     this.mirrorTimer = setTimeout(() => {
+      this.mirrorTimer = null;
       this.mirrorToIndexedDB().catch(() => {});
     }, 200);
   }
 
+  flushMirror() {
+    if (this.mirrorTimer) {
+      clearTimeout(this.mirrorTimer);
+      this.mirrorTimer = null;
+    }
+    return this.mirrorToIndexedDB().catch(() => {});
+  }
+
+  hasPendingSync() {
+    try {
+      return localStorage.getItem(KEYS.PENDING_SYNC) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  setPendingSync(pending) {
+    try {
+      if (pending) localStorage.setItem(KEYS.PENDING_SYNC, '1');
+      else localStorage.removeItem(KEYS.PENDING_SYNC);
+    } catch {
+      // localStorage bloqueado
+    }
+  }
+
+  syncInBackground(promise) {
+    Promise.resolve(promise)
+      .then((res) => {
+        if (!res || !res.success) this.setPendingSync(true);
+      })
+      .catch(() => {
+        this.setPendingSync(true);
+      });
+  }
+
   buildSnapshot() {
     const nutrition = {};
+    let theme = 'light';
+    let syncKey = '';
     try {
+      theme = localStorage.getItem(KEYS.THEME) || 'light';
+      syncKey = localStorage.getItem(KEYS.SYNC_KEY) || '';
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith(NUTRITION_PREFIX)) {
@@ -205,6 +275,8 @@ export class StorageService {
       settings: readJson(KEYS.SETTINGS, {}),
       profile: readJson(KEYS.PROFILE, null),
       tombstones: readJson(KEYS.TOMBSTONES, {}),
+      theme,
+      syncKey,
       nutrition
     };
   }
@@ -246,6 +318,18 @@ export class StorageService {
       writeJson(KEYS.TOMBSTONES, snapshot.tombstones);
       restored = true;
     }
+    if (!localStorage.getItem(KEYS.THEME) && snapshot.theme) {
+      this.setTheme(snapshot.theme);
+      if (typeof document !== 'undefined') {
+        document.documentElement.classList.toggle('dark', snapshot.theme === 'dark');
+      }
+      restored = true;
+    }
+    if (!localStorage.getItem(KEYS.SYNC_KEY) && snapshot.syncKey) {
+      localStorage.setItem(KEYS.SYNC_KEY, snapshot.syncKey);
+      convex.refreshSyncKeyFromStorage();
+      restored = true;
+    }
     if (snapshot.nutrition && typeof snapshot.nutrition === 'object') {
       for (const [key, value] of Object.entries(snapshot.nutrition)) {
         if (key.startsWith(NUTRITION_PREFIX) && !localStorage.getItem(key) && value) {
@@ -280,7 +364,7 @@ export class StorageService {
     };
     writeJson(KEYS.PROFILE, merged);
     this.scheduleMirror();
-    convex.syncProfile(merged).catch(() => {});
+    this.syncInBackground(convex.syncProfile(merged));
     return merged;
   }
 
@@ -310,13 +394,19 @@ export class StorageService {
 
   saveWorkoutSession(session) {
     const logs = this.getWorkoutLogs();
+    const cleanedExercises = Array.isArray(session.exercises)
+      ? session.exercises.map(({ previousLog: _prev, ...rest }) => rest)
+      : [];
+
     const normalized = normalizeWorkout({
       ...session,
+      exercises: cleanedExercises,
       id: session.id || session.sessionId || `session_${Date.now()}`,
       updatedAt: Date.now()
     });
     if (!normalized) return session;
 
+    this.clearTombstone('workouts', normalized.id);
     const index = logs.findIndex((log) => log.id === normalized.id || log.sessionId === normalized.id);
     if (index >= 0) logs[index] = normalized;
     else logs.unshift(normalized);
@@ -326,7 +416,7 @@ export class StorageService {
     this.clearActiveSession();
     this.scheduleMirror();
 
-    convex.syncWorkout(normalized).catch(() => {});
+    this.syncInBackground(convex.syncWorkout(normalized));
     return normalized;
   }
 
@@ -336,7 +426,7 @@ export class StorageService {
     this.addTombstone('workouts', sessionId);
     this.scheduleMirror();
 
-    convex.mutation('workouts:deleteSession', { sessionId }).catch(() => {});
+    this.syncInBackground(convex.mutation('workouts:deleteSession', { sessionId }));
   }
 
   // Obtener el último registro de un ejercicio específico para mostrar referencia previa
@@ -393,11 +483,12 @@ export class StorageService {
   }
 
   getNutrition(date = todayKey()) {
+    const waterGoalMl = Math.round((Number(this.getProfile().waterTargetLitres) || 3) * 1000);
     return readJson(this.getNutritionKey(date), {
       date,
       medicationTaken: false,
       waterMl: 0,
-      waterGoalMl: 3000,
+      waterGoalMl,
       completedMeals: {},
       notes: ''
     });
@@ -416,7 +507,7 @@ export class StorageService {
     const payload = { ...data, date, updatedAt: Date.now() };
     writeJson(key, payload);
     this.scheduleMirror();
-    convex.syncNutrition(date, payload).catch(() => {});
+    this.syncInBackground(convex.syncNutrition(date, payload));
     return payload;
   }
 
@@ -447,7 +538,11 @@ export class StorageService {
     return list
       .map((measurement) => normalizeMeasurement(measurement))
       .filter(Boolean)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      .sort((a, b) => {
+        const byDate = (b.date || '').localeCompare(a.date || '');
+        if (byDate !== 0) return byDate;
+        return Number(isInBodyMeasurement(b)) - Number(isInBodyMeasurement(a));
+      });
   }
 
   addMeasurement(measurement) {
@@ -455,28 +550,43 @@ export class StorageService {
     const normalized = normalizeMeasurement({ ...measurement, updatedAt: Date.now() });
     if (!normalized) return measurement;
 
-    const existingIdx = list.findIndex((item) => item.date === normalized.date);
+    const targetKey = measurementKey(normalized);
+    this.clearTombstone('measurements', targetKey);
+    this.clearTombstone('measurements', normalized.date);
+
+    const existingIdx = list.findIndex((item) => measurementKey(item) === targetKey);
     if (existingIdx >= 0) {
       list[existingIdx] = normalizeMeasurement(normalized, list[existingIdx]);
-      this.clearTombstone('measurements', normalized.date);
     } else {
       list.unshift(normalized);
     }
-    list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    list.sort((a, b) => {
+      const byDate = (b.date || '').localeCompare(a.date || '');
+      if (byDate !== 0) return byDate;
+      return Number(isInBodyMeasurement(b)) - Number(isInBodyMeasurement(a));
+    });
     writeJson(KEYS.MEASUREMENTS, list);
     this.scheduleMirror();
 
-    convex.syncMeasurement(normalized).catch(() => {});
+    this.syncInBackground(convex.syncMeasurement(normalized));
     return normalized;
   }
 
-  deleteMeasurement(date) {
-    const list = this.getMeasurements().filter((item) => item.date !== date);
+  deleteMeasurement(date, source = undefined) {
+    const hasSourceFilter = source !== undefined && source !== null;
+    const targetIsInBody = isInBodyMeasurement({ source });
+    const list = this.getMeasurements().filter((item) => {
+      if (item.date !== date) return true;
+      if (!hasSourceFilter) return false;
+      return isInBodyMeasurement(item) !== targetIsInBody;
+    });
     writeJson(KEYS.MEASUREMENTS, list);
-    this.addTombstone('measurements', date);
+    const tombstoneKey = hasSourceFilter ? measurementKey({ date, source }) : date;
+    if (tombstoneKey) this.addTombstone('measurements', tombstoneKey);
     this.scheduleMirror();
 
-    convex.mutation('measurements:deleteMeasurement', { date }).catch(() => {});
+    const payload = hasSourceFilter ? { date, source } : { date };
+    this.syncInBackground(convex.mutation('measurements:deleteMeasurement', payload));
   }
 
   // --- CONFIGURACIÓN ---
@@ -521,8 +631,9 @@ export class StorageService {
     const tombstones = this.getTombstones();
     const deletions = [];
     for (const [type, entries] of Object.entries(tombstones)) {
-      for (const key of Object.keys(entries || {})) {
-        deletions.push({ type, key });
+      for (const [key, value] of Object.entries(entries || {})) {
+        const deletedAt = typeof value === 'object' ? toTimestamp(value.deletedAt) : toTimestamp(value);
+        deletions.push({ type, key, deletedAt: deletedAt || Date.now() });
       }
     }
     return deletions;
@@ -576,19 +687,43 @@ export class StorageService {
 
     // 2. MERGE last-write-wins con tombstones.
     const localWorkoutIds = new Set(localWorkouts.map((w) => w.id));
-    const localMeasDates = new Set(localMeas.map((m) => m.date));
+    const localMeasKeys = new Set(localMeas.map((m) => measurementKey(m)).filter(Boolean));
     const localWeightIds = new Set(Object.keys(localCustomWeights));
 
     const importedWorkouts = cloudWorkouts.filter((w) => {
       const id = w.sessionId || w.id;
       return id && !localWorkoutIds.has(id);
     }).length;
-    const importedMeas = cloudMeas.filter((m) => m.date && !localMeasDates.has(m.date)).length;
+    const importedMeas = cloudMeas.filter((m) => {
+      const key = measurementKey(m);
+      return key && !localMeasKeys.has(key);
+    }).length;
     const importedWeights = Object.keys(cloudCustom).filter((id) => !localWeightIds.has(id)).length;
 
     const mergedWorkouts = mergeWorkouts(localWorkouts, cloudWorkouts, tombstones);
     const mergedMeas = mergeMeasurements(localMeas, cloudMeas, tombstones);
     const mergedWeights = mergeCustomWeights(localCustomWeights, cloudCustom);
+
+    // Si algún registro sobrevivió por tener una versión más nueva que su tombstone,
+    // retiramos ese tombstone superado para no enviarlo de nuevo.
+    for (const workout of mergedWorkouts) {
+      const entry = tombstones?.workouts?.[workout.id];
+      const deletedAt = typeof entry === 'object' ? toTimestamp(entry.deletedAt) : toTimestamp(entry);
+      if (entry && workoutVersion(workout) > deletedAt) {
+        delete tombstones.workouts[workout.id];
+      }
+    }
+    for (const meas of mergedMeas) {
+      const key = measurementKey(meas);
+      const measVer = toTimestamp(meas.updatedAt);
+      for (const candidateKey of [key, meas.date]) {
+        const entry = candidateKey ? tombstones?.measurements?.[candidateKey] : null;
+        const deletedAt = typeof entry === 'object' ? toTimestamp(entry.deletedAt) : toTimestamp(entry);
+        if (entry && measVer > deletedAt) {
+          delete tombstones.measurements[candidateKey];
+        }
+      }
+    }
 
     // 3. Nutrición: mezclar por día (la nube ahora sí se descarga).
     if (cloudNutrition) {
@@ -623,8 +758,15 @@ export class StorageService {
     const cloudWorkoutVersions = new Map(cloudWorkouts.map((w) => [w.sessionId || w.id, workoutVersion(w)]));
     const workoutsToPush = mergedWorkouts.filter((w) => workoutVersion(w) > (cloudWorkoutVersions.get(w.id) || 0));
 
-    const cloudMeasVersions = new Map(cloudMeas.map((m) => [m.date, toTimestamp(m.updatedAt) || toTimestamp(m.createdAt)]));
-    const measToPush = mergedMeas.filter((m) => m.date && (toTimestamp(m.updatedAt) > (cloudMeasVersions.get(m.date) || 0)));
+    const cloudMeasVersions = new Map(
+      cloudMeas
+        .map((m) => [measurementKey(m), toTimestamp(m.updatedAt) || toTimestamp(m.createdAt)])
+        .filter(([k]) => Boolean(k))
+    );
+    const measToPush = mergedMeas.filter((m) => {
+      const key = measurementKey(m);
+      return key && (toTimestamp(m.updatedAt) > (cloudMeasVersions.get(key) || 0));
+    });
 
     const cloudWeightVersions = new Map(Object.entries(cloudCustom).map(([id, value]) => [id, toTimestamp(value?.updatedAt)]));
     const weightsToPush = {};
@@ -658,11 +800,14 @@ export class StorageService {
     }
 
     if (pushRes && !pushRes.success) {
+      this.setPendingSync(true);
       return { success: false, code: pushRes.code || 'PUSH_FAILED', error: pushRes.error || 'No se pudo respaldar en la nube.' };
     }
 
     // 7. Limpiar tombstones muy antiguos (se conservan 90 días por seguridad).
     writeJson(KEYS.TOMBSTONES, pruneTombstones(tombstones));
+    this.setPendingSync(false);
+    convex.markSynced({ source: 'syncTwoWay' });
 
     this.scheduleMirror();
 
@@ -730,7 +875,7 @@ export class StorageService {
     writeJson(KEYS.CUSTOM_WEIGHTS, meta);
     this.scheduleMirror();
 
-    convex.syncCustomWeight(exerciseId, numericWeight, updatedAt).catch(() => {});
+    this.syncInBackground(convex.syncCustomWeight(exerciseId, numericWeight, updatedAt));
     return this.getCustomWeights();
   }
 
@@ -744,56 +889,8 @@ export class StorageService {
     if (!exerciseId) return null;
 
     const prevLog = this.getLastExerciseLog(exerciseId);
-    if (!prevLog || !prevLog.sets || prevLog.sets.length === 0) return null;
-
-    // Si el usuario fijó un peso objetivo después de la última sesión,
-    // respetamos su decisión y no proponemos otra cosa.
-    const customMeta = this.getCustomWeightsMeta()[exerciseId];
-    if (customMeta && Number(customMeta.updatedAt) > (prevLog.sessionUpdatedAt || 0)) return null;
-
-    const repsStr = String(exerciseDef.defaultReps || '8-10');
-    const parts = repsStr.match(/\d+/g);
-    if (!parts || parts.length === 0) return null;
-    const minTargetReps = parseInt(parts[0], 10);
-    const maxTargetReps = parts.length > 1 ? parseInt(parts[1], 10) : minTargetReps;
-
-    const currentTargetWeight = Number(prevLog.bestWeight) || Number(exerciseDef.baseWeight) || 0;
-    if (!currentTargetWeight || currentTargetWeight <= 0) return null;
-
-    const targetSets = Number(exerciseDef.defaultSets) || prevLog.sets.length || 3;
-    const setsAtTargetWeight = prevLog.sets.filter((set) => set.completed && (Number(set.weight) || 0) >= currentTargetWeight);
-    if (setsAtTargetWeight.length < targetSets) return null;
-
-    const bestRepsAtWeight = Math.max(...setsAtTargetWeight.map((set) => Number(set.reps) || 0));
-    const allSetsMetMin = setsAtTargetWeight.every((set) => (Number(set.reps) || 0) >= minTargetReps);
-
-    if (bestRepsAtWeight >= maxTargetReps && allSetsMetMin) {
-      const smallIncrementIds = new Set([
-        'shoulder_press', 'shoulder_press_t2', 'lateral_raise_machine',
-        'rear_delt_face_pull', 'biceps_cable_curl', 'biceps_curl_t2',
-        'triceps_pushdown', 'triceps_extension_t2', 'ab_crunch_machine'
-      ]);
-      const increment = smallIncrementIds.has(exerciseId) ? 2.5 : 5;
-      const nextWeight = Math.round((currentTargetWeight + increment) * 10) / 10;
-
-      return {
-        shouldUpgrade: true,
-        exerciseId,
-        previousWeight: Number(prevLog.bestWeight) || currentTargetWeight,
-        previousReps: bestRepsAtWeight,
-        targetRepRange: repsStr,
-        targetSets,
-        completedSets: setsAtTargetWeight.length,
-        minTargetReps,
-        maxTargetReps,
-        currentTargetWeight,
-        increment,
-        nextWeight,
-        nextReps: minTargetReps
-      };
-    }
-
-    return null;
+    const customMeta = this.getCustomWeightsMeta()[exerciseId] || null;
+    return computeOverloadSuggestion(exerciseDef, prevLog, customMeta);
   }
 
   // Obtener estadísticas de evolución y bitácora para un ejercicio específico

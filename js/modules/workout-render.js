@@ -1,5 +1,6 @@
 // Plantillas de render del módulo de entrenamiento.
 import { INITIAL_DATA } from '../data/initialData.js';
+import { CONFIG } from '../config.js';
 import { state } from '../state.js';
 import { db } from '../services/db.js';
 import { escapeHtml, escapeAttr, safeUrl } from '../utils/escape.js';
@@ -19,13 +20,17 @@ const DAY_ICONS = {
 
 // 1. Tarjeta de Ejercicio de Fuerza en Modo Previa
 export function renderStaticExerciseCard(ex, exIndex, prevLog) {
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
   const customEntry = db.getCustomWeightsMeta()[ex.id];
   const customIsNewer = customEntry && Number(customEntry.updatedAt) > (prevLog?.sessionUpdatedAt || 0);
   const customWeight = customIsNewer && Number(customEntry.weight) > 0 ? Number(customEntry.weight) : null;
   const suggestion = db.getProgressiveOverloadSuggestion(ex);
+  const fallbackStaticBadge = !ex.baseWeight || ex.baseWeight === 'Pendiente'
+    ? 'Pendiente'
+    : (['Auto', 'Corporal'].includes(ex.baseWeight) ? escapeHtml(ex.baseWeight) : `${escapeHtml(ex.baseWeight)} ${unit}/placa`);
   const displayWeightBadge = customWeight !== null
-    ? `Meta: ${customWeight} kg`
-    : (prevLog ? `${prevLog.bestWeight} kg × ${prevLog.bestReps}` : (ex.baseWeight !== 'Pendiente' && ex.baseWeight !== 'Auto' ? `${ex.baseWeight} kg/placa` : 'Pendiente'));
+    ? `Meta: ${customWeight} ${unit}`
+    : (prevLog ? `${prevLog.bestWeight} ${unit} × ${prevLog.bestReps}` : fallbackStaticBadge);
 
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.id}">
@@ -64,8 +69,8 @@ export function renderStaticExerciseCard(ex, exIndex, prevLog) {
               <div class="leading-tight">
                 <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Doble progresión</span>
                 <span class="text-[12px] text-[var(--muted-foreground)] leading-relaxed block">
-                  Última sesión: <b>${suggestion.previousWeight} kg</b> en <b>${suggestion.completedSets} series</b> · mejor serie <b>${suggestion.previousReps} reps</b> · rango ${suggestion.targetRepRange}.
-                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} kg × ${suggestion.nextReps} reps</b> (+${suggestion.increment} kg).
+                  Última sesión: <b>${suggestion.previousWeight} ${unit}</b> en <b>${suggestion.completedSets} series</b> · mejor serie <b>${suggestion.previousReps} reps</b> · rango ${suggestion.targetRepRange}.
+                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} ${unit} × ${suggestion.nextReps} reps</b> (+${suggestion.increment} ${unit}).
                 </span>
               </div>
             </div>
@@ -75,10 +80,15 @@ export function renderStaticExerciseCard(ex, exIndex, prevLog) {
               data-id="${escapeAttr(ex.id)}"
               data-weight="${suggestion.nextWeight}"
               data-reps="${suggestion.nextReps}">
-              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} kg × ${suggestion.nextReps} reps
+              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} ${unit} × ${suggestion.nextReps} reps
             </button>
           </div>
-        ` : ''}
+        ` : (suggestion && suggestion.progressHint ? `
+          <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+            <span class="shrink-0 text-amber-500">${icon('trending-up', 'w-4 h-4')}</span>
+            <span><b class="text-[var(--foreground)]">Smart Coach:</b> ${escapeHtml(suggestion.progressHint)}</span>
+          </div>
+        ` : '')}
 
         <!-- Botón colapsable para Ver Imagen y Tips Técnicos -->
         <div class="mt-3">
@@ -165,11 +175,15 @@ export function renderStaticCardioCard(ex, exIndex) {
 
 // 3. Tarjeta de Ejercicio de Fuerza en Vivo (Pendiente)
 export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
   const suggestion = db.getProgressiveOverloadSuggestion({ ...def, id: ex.exerciseId });
   const pendingSets = (ex.sets || []).filter(set => !set.completed);
   const showSuggestion = suggestion && suggestion.shouldUpgrade && pendingSets.length > 0
     && pendingSets.some(set => (Number(set.weight) || 0) < suggestion.nextWeight);
   const baseSets = Number(def?.defaultSets) || ex.sets.length;
+  const fallbackLiveBadge = !def.baseWeight || def.baseWeight === 'Pendiente'
+    ? 'Pendiente'
+    : (['Auto', 'Corporal'].includes(def.baseWeight) ? escapeHtml(def.baseWeight) : `${escapeHtml(def.baseWeight)} ${unit}`);
 
   return `
     <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] shadow-xs overflow-hidden transition-all" id="card-${ex.exerciseId}">
@@ -198,7 +212,7 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
           <div class="text-right shrink-0">
             <span class="text-[10px] text-[var(--muted-foreground)] block">Marca previa:</span>
             <span class="text-xs font-mono font-bold px-2 py-1 rounded-lg bg-[var(--accent)] text-[var(--foreground)] border border-[var(--border)] inline-block mt-0.5">
-              ${prevLog ? `${prevLog.bestWeight} kg × ${prevLog.bestReps}` : (def.baseWeight && def.baseWeight !== 'Pendiente' ? `${def.baseWeight} kg` : 'Pendiente')}
+              ${prevLog ? `${prevLog.bestWeight} ${unit} × ${prevLog.bestReps}` : fallbackLiveBadge}
             </span>
           </div>
         </div>
@@ -210,8 +224,8 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
               <div class="leading-tight">
                 <span class="font-extrabold text-amber-500 block text-[13px]">Smart Coach • Nueva base</span>
                 <span class="text-[12px] text-[var(--muted-foreground)] leading-relaxed block">
-                  Última sesión: <b>${suggestion.previousWeight} kg</b> en ${suggestion.completedSets} series · mejor serie ${suggestion.previousReps} reps (rango ${suggestion.targetRepRange}).
-                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} kg × ${suggestion.nextReps} reps</b> (+${suggestion.increment} kg). ¿Aplicarla a las series restantes?
+                  Última sesión: <b>${suggestion.previousWeight} ${unit}</b> en ${suggestion.completedSets} series · mejor serie ${suggestion.previousReps} reps (rango ${suggestion.targetRepRange}).
+                  Nueva base: <b class="text-emerald-500">${suggestion.nextWeight} ${unit} × ${suggestion.nextReps} reps</b> (+${suggestion.increment} ${unit}). ¿Aplicarla a las series restantes?
                 </span>
               </div>
             </div>
@@ -222,10 +236,15 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
               data-ex="${exIndex}"
               data-weight="${suggestion.nextWeight}"
               data-reps="${suggestion.nextReps}">
-              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} kg × ${suggestion.nextReps} reps
+              ${icon('zap', 'w-4 h-4')} Aplicar ${suggestion.nextWeight} ${unit} × ${suggestion.nextReps} reps
             </button>
           </div>
-        ` : ''}
+        ` : (suggestion && !suggestion.shouldUpgrade && suggestion.progressHint ? `
+          <div class="mt-3 p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+            <span class="shrink-0 text-amber-500">${icon('trending-up', 'w-4 h-4')}</span>
+            <span><b class="text-[var(--foreground)]">Smart Coach:</b> ${escapeHtml(suggestion.progressHint)}</span>
+          </div>
+        ` : '')}
 
         <!-- Tips colapsables -->
         <div class="mt-3">
@@ -281,6 +300,16 @@ export function renderLiveExerciseCard(ex, exIndex, def, prevLog) {
                 ${icon('check', 'w-4 h-4')} Marcar todo listo
               </button>
             </div>
+          </div>
+
+          <div class="pt-2 border-t border-[var(--border)]/40">
+            <input
+              type="text"
+              value="${escapeAttr(ex.notes || '')}"
+              placeholder="Nota rápida del ejercicio (ej: asiento 4, técnica, molestia)..."
+              aria-label="Nota rápida para ${escapeAttr(ex.exerciseName)}"
+              data-ex="${exIndex}"
+              class="input-exercise-note w-full p-2 rounded-xl bg-[var(--card)] border border-[var(--border)] outline-none text-[12px] text-[var(--foreground)]" />
           </div>
         </div>
       </div>
@@ -362,6 +391,7 @@ export function renderLiveCardioCard(ex, exIndex, def) {
 function renderSetRow(exIndex, setIndex, set, canRemove = false) {
   const isDone = !!set.completed;
   const setNumber = set.setNumber;
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
 
   const stepper = ({ field, label, value, inputLabel, minusLabel, plusLabel, delta }) => `
     <div class="flex items-center gap-1.5">
@@ -372,7 +402,7 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
           type="number"
           step="any"
           value="${escapeAttr(value)}"
-          placeholder="${field === 'weight' ? 'kg' : 'reps'}"
+          placeholder="${field === 'weight' ? unit : 'reps'}"
           class="input-set-field flex-1 min-w-0 h-full text-center font-mono text-[12px] font-bold bg-transparent outline-none text-[var(--foreground)] px-0"
           data-ex="${exIndex}"
           data-set="${setIndex}"
@@ -391,9 +421,9 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
             field: 'weight',
             label: 'Peso',
             value: set.weight,
-            inputLabel: `Peso en kg de la serie ${setNumber}`,
-            minusLabel: `Bajar 2.5 kg de la serie ${setNumber}`,
-            plusLabel: `Subir 2.5 kg de la serie ${setNumber}`,
+            inputLabel: `Peso en ${unit} de la serie ${setNumber}`,
+            minusLabel: `Bajar 2.5 ${unit} de la serie ${setNumber}`,
+            plusLabel: `Subir 2.5 ${unit} de la serie ${setNumber}`,
             delta: 2.5
           })}
           ${stepper({
@@ -439,11 +469,12 @@ function renderSetRow(exIndex, setIndex, set, canRemove = false) {
 
 // 6. Tarjeta compacta para Ejercicio Completado (Al final de la pantalla)
 export function renderCompletedExerciseCard(ex, exIndex, def) {
+  const unit = CONFIG.WEIGHT_UNIT;
   const isCardio = !!ex.isCardio || !!def.isCardio;
   const baseSets = Number(def?.defaultSets) || ex.sets.length;
   const setsSummary = isCardio
     ? `${Number(ex.minutes ?? ex.sets?.[0]?.weight) || 20} min en Zona 2 completados`
-    : ex.sets.map(s => `${s.weight ? `${s.weight}kg` : ''} x ${s.reps}`).join(' • ');
+    : ex.sets.map(s => `${s.weight ? `${s.weight}${unit}` : ''} x ${s.reps}`).join(' • ');
 
   return `
     <div class="bg-[var(--card)]/75 border border-emerald-500/30 rounded-2xl p-3 shadow-xs transition-all opacity-95" id="card-${ex.exerciseId}">
@@ -456,6 +487,7 @@ export function renderCompletedExerciseCard(ex, exIndex, def) {
               <h4 class="text-xs sm:text-sm font-bold text-[var(--foreground)] truncate">${escapeHtml(ex.exerciseName)}</h4>
             </div>
             <p class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${escapeHtml(setsSummary)}</p>
+            ${ex.notes ? `<p class="text-[10px] text-amber-500 truncate mt-0.5">${escapeHtml(ex.notes)}</p>` : ''}
           </div>
         </div>
 

@@ -1,6 +1,7 @@
 // Estado reactivo global de la aplicación
 import { db } from './services/db.js';
 import { INITIAL_DATA } from './data/initialData.js';
+import { parseBaseWeight } from './services/overload.js';
 
 // Función para detectar el identificador del día actual (auto-selección inteligente)
 export function getTodayDayId(date = new Date()) {
@@ -62,16 +63,19 @@ class AppState {
 
     const customWeightsMeta = db.getCustomWeightsMeta();
 
+    const now = Date.now();
+    const sessionId = `session_${now}`;
+
     // Crear esqueleto de sesión
     this.activeWorkout = {
-      id: 'session_' + Date.now(),
-      sessionId: 'session_' + Date.now(),
+      id: sessionId,
+      sessionId,
       routineId,
       routineName: routine.name,
       dayName: routine.dayName,
-      startTime: new Date().toISOString(),
-      date: new Date().toLocaleDateString('en-CA'),
-      updatedAt: Date.now(),
+      startTime: new Date(now).toISOString(),
+      date: new Date(now).toLocaleDateString('en-CA'),
+      updatedAt: now,
       cardioDone: false,
       cardioMinutes: 20,
       notes: '',
@@ -84,7 +88,6 @@ class AppState {
             exerciseName: ex.name,
             isCardio: true,
             minutes: 20,
-            previousLog: prev,
             sets: [{
               setNumber: 1,
               weight: 20, // espejo de minutes para compatibilidad
@@ -101,7 +104,7 @@ class AppState {
         const lastSessionAt = prev?.sessionUpdatedAt || 0;
         const customIsNewer = customEntry && Number(customEntry.updatedAt) > lastSessionAt;
         const useCustomTarget = customIsNewer && customWeight > 0;
-        const fallbackBase = (ex.baseWeight === 'Pendiente' || ex.baseWeight === 'Auto') ? '' : ex.baseWeight;
+        const fallbackBase = parseBaseWeight(ex.baseWeight);
 
         // Base de hoy: la marca real de la última sesión. Un peso objetivo
         // editado después de esa sesión sí manda (es una decisión explícita)
@@ -133,7 +136,6 @@ class AppState {
           exerciseId: ex.id,
           exerciseName: ex.name,
           isCardio: false,
-          previousLog: prev,
           sets,
           notes: ''
         };
@@ -156,14 +158,35 @@ class AppState {
 
   toggleSetCompleted(exerciseIndex, setIndex, shouldNotify = true) {
     if (!this.activeWorkout) return false;
-    const current = this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed;
-    this.activeWorkout.exercises[exerciseIndex].sets[setIndex].completed = !current;
+    const ex = this.activeWorkout.exercises[exerciseIndex];
+    const current = ex.sets[setIndex].completed;
+    const next = !current;
+    ex.sets[setIndex].completed = next;
+    if (ex.isCardio) {
+      this.activeWorkout.cardioDone = next;
+      const mins = Number(ex.minutes ?? ex.sets?.[0]?.weight) || 20;
+      this.activeWorkout.cardioMinutes = next ? mins : 0;
+    }
     this.activeWorkout.updatedAt = Date.now();
     db.saveActiveSession(this.activeWorkout);
     if (shouldNotify) {
       this.notify();
     }
-    return !current; // retorna el nuevo estado
+    return next; // retorna el nuevo estado
+  }
+
+  updateExerciseNote(exerciseIndex, note) {
+    if (!this.activeWorkout?.exercises?.[exerciseIndex]) return;
+    this.activeWorkout.exercises[exerciseIndex].notes = String(note || '');
+    this.activeWorkout.updatedAt = Date.now();
+    db.saveActiveSession(this.activeWorkout);
+  }
+
+  updateSessionNote(note) {
+    if (!this.activeWorkout) return;
+    this.activeWorkout.notes = String(note || '');
+    this.activeWorkout.updatedAt = Date.now();
+    db.saveActiveSession(this.activeWorkout);
   }
 
   completeAllSetsOfExercise(exerciseIndex) {

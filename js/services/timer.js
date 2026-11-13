@@ -172,10 +172,18 @@ export class RestTimer {
   }
 
   addSeconds(secs = 15) {
-    this.remainingSeconds += secs;
+    const delta = Number(secs) || 0;
+    const wasCompleted = !this.isRunning && this.remainingSeconds <= 0;
+
+    if (wasCompleted && delta > 0) {
+      this.start(delta);
+      return;
+    }
+
+    this.remainingSeconds = Math.max(0, this.remainingSeconds + delta);
     this.totalSeconds = Math.max(this.totalSeconds, this.remainingSeconds);
     if (this.isRunning && this.endTime) {
-      this.endTime += secs * 1000;
+      this.endTime += delta * 1000;
     }
     this.persist();
     this.notifyTick();
@@ -269,16 +277,27 @@ export class RestTimer {
     }
   }
 
-  showCompletionNotification() {
+  async showCompletionNotification() {
     try {
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
       if (!document.hidden) return;
-      new Notification('Descanso terminado', {
+      const options = {
         body: 'Ya puedes volver a la siguiente serie.',
         icon: './assets/icons/icon-192.png',
         tag: 'kinetix-rest-timer',
         silent: false
-      });
+      };
+
+      // Chrome Android exige ServiceWorkerRegistration.showNotification().
+      if ('serviceWorker' in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg && typeof reg.showNotification === 'function') {
+          await reg.showNotification('Descanso terminado', options);
+          return;
+        }
+      }
+
+      new Notification('Descanso terminado', options);
     } catch {
       // Algunos navegadores móviles no permiten notificaciones desde la página.
     }

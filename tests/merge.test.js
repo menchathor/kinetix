@@ -10,7 +10,8 @@ import {
   mergeCustomWeights,
   mergeNutrition,
   isTombstoned,
-  pruneTombstones
+  pruneTombstones,
+  measurementKey
 } from '../js/services/merge.js';
 
 test('toTimestamp acepta ISO, números y valores inválidos', () => {
@@ -131,4 +132,26 @@ test('pruneTombstones elimina registros antiguos', () => {
 test('workoutVersion usa updatedAt o startTime', () => {
   assert.equal(workoutVersion({ updatedAt: 5000, startTime: '2026-01-01T00:00:00.000Z' }), 5000);
   assert.ok(workoutVersion({ startTime: '2026-01-01T00:00:00.000Z' }) > 0);
+});
+
+test('mergeMeasurements conserva mediciones hogar e InBody el mismo día y respeta tombstone por fuente', () => {
+  const local = [
+    { date: '2026-10-19', source: 'Eufy Life (Báscula hogar)', weight: 78.4, updatedAt: 1000 }
+  ];
+  const cloud = [
+    { date: '2026-10-19', source: 'Smart Fit (InBody multicanal)', weight: 78.9, bodyFatPercent: 20.1, updatedAt: 2000 },
+    { date: '2026-10-18', source: 'Smart Fit (InBody multicanal)', weight: 79.1, updatedAt: 1000 }
+  ];
+  const inbodyTombKey = measurementKey({ date: '2026-10-18', source: 'Smart Fit (InBody multicanal)' });
+  const merged = mergeMeasurements(local, cloud, {
+    measurements: {
+      [inbodyTombKey]: { deletedAt: 3000 }
+    }
+  });
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].date, '2026-10-19');
+  assert.match(merged[0].source, /InBody/i);
+  assert.equal(merged[1].date, '2026-10-19');
+  assert.match(merged[1].source, /Báscula hogar/i);
 });

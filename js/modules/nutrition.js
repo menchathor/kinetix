@@ -13,7 +13,7 @@ export function renderNutritionModule(container) {
   const nutritionData = INITIAL_DATA.nutrition;
   const profile = db.getProfile();
   const today = db.getTodayNutrition();
-  const goal = Number(nutritionData.targetWaterMl) || 3000;
+  const goal = Math.round((Number(profile.waterTargetLitres) || 0) * 1000) || Number(nutritionData.targetWaterMl) || 3000;
   const meals = nutritionData.meals.filter(meal => meal.id !== 'medication');
   const waterPercent = Math.min(100, Math.round((Number(today.waterMl) || 0) / goal * 100));
 
@@ -72,7 +72,7 @@ export function renderNutritionModule(container) {
             <span>
               <span class="text-[13px] font-bold text-[var(--foreground)] block">Levotiroxina en ayunas</span>
               <span class="text-[10px] text-[var(--muted-foreground)] block">06:30 – 07:00 • con 250-300 ml de agua</span>
-              ${today.medicationTaken && today.medicationTime ? `<span class="text-[10px] text-emerald-400 font-bold block mt-1">Registrada ${escapeHtml(today.medicationTime)}</span>` : ''}
+              <span id="medicationTimeLabel" class="text-[10px] text-emerald-400 font-bold block mt-1 ${today.medicationTaken && today.medicationTime ? '' : 'hidden'}">${today.medicationTaken && today.medicationTime ? `Registrada ${escapeHtml(today.medicationTime)}` : ''}</span>
             </span>
           </label>
 
@@ -257,6 +257,7 @@ function attachNutritionEvents(container, today, goal) {
   const waterBar = container.querySelector('#waterBar');
 
   const persist = () => {
+    today.waterGoalMl = goal;
     db.saveNutrition(today.date, today);
     if (stateEl) {
       stateEl.classList.remove('opacity-0');
@@ -281,6 +282,7 @@ function attachNutritionEvents(container, today, goal) {
   container.querySelector('#btnWaterMinus')?.addEventListener('click', () => changeWater(-250));
 
   const medicationToggle = container.querySelector('#medicationToggle');
+  const medicationTimeLabel = container.querySelector('#medicationTimeLabel');
   if (medicationToggle) {
     medicationToggle.addEventListener('change', () => {
       today.medicationTaken = medicationToggle.checked;
@@ -288,14 +290,11 @@ function attachNutritionEvents(container, today, goal) {
         ? new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
         : '';
       persist();
-      if (medicationToggle.checked) {
-        const note = medicationToggle.closest('label')?.querySelector('.text-emerald-400');
-        if (!note) {
-          const span = document.createElement('span');
-          span.className = 'text-[10px] text-emerald-400 font-bold block mt-1';
-          span.textContent = `Registrada ${today.medicationTime}`;
-          medicationToggle.closest('label')?.querySelector('span')?.appendChild(span);
-        }
+      if (medicationTimeLabel) {
+        medicationTimeLabel.textContent = today.medicationTaken && today.medicationTime
+          ? `Registrada ${today.medicationTime}`
+          : '';
+        medicationTimeLabel.classList.toggle('hidden', !today.medicationTaken || !today.medicationTime);
       }
     });
   }

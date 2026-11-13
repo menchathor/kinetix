@@ -7,6 +7,7 @@ import { renderNutritionModule } from './modules/nutrition.js';
 import { renderAnalyticsModule } from './modules/analytics.js';
 import { renderSettingsModule } from './modules/settings.js';
 import { db } from './services/db.js';
+import { getInitials } from './services/analytics-calc.js';
 import { convex } from './services/convex.js';
 import { showToast, hasOpenModal, closeTopModal } from './ui/toast.js';
 import { icon } from './ui/icons.js';
@@ -159,17 +160,25 @@ class App {
 
     const online = navigator.onLine;
     const hasKey = convex.hasSyncKey();
+    const pending = db.hasPendingSync();
     iconEl.innerHTML = icon(
       this.isSyncing ? 'loader' : (online ? 'cloud' : 'cloud-off'),
       this.isSyncing ? 'w-6 h-6 animate-spin' : 'w-6 h-6'
     );
 
-    if (dot) dot.classList.toggle('hidden', online && hasKey);
-    const label = this.isSyncing
-      ? 'Sincronizando datos'
-      : online
-        ? (hasKey ? 'Sincronización configurada y en línea' : 'En línea, sin clave de sincronización')
-        : 'Sin conexión, guardando en el dispositivo';
+    if (dot) dot.classList.toggle('hidden', online && hasKey && !pending);
+    let label;
+    if (this.isSyncing) {
+      label = 'Sincronizando datos';
+    } else if (!online) {
+      label = pending ? 'Sin conexión, cambios pendientes de sincronizar' : 'Sin conexión, guardando en el dispositivo';
+    } else if (!hasKey) {
+      label = 'En línea, sin clave de sincronización';
+    } else if (pending) {
+      label = 'Cambios locales pendientes de sincronizar';
+    } else {
+      label = 'Sincronización configurada y en línea';
+    }
     btn.setAttribute('aria-label', `Estado de sincronización: ${label}`);
     btn.setAttribute('title', label);
   }
@@ -178,13 +187,18 @@ class App {
     const profile = db.getProfile();
     const subtitle = document.getElementById('headerSubtitle');
     if (subtitle) {
-      subtitle.innerHTML = `Recomposición Corporal<span class="hidden min-[430px]:inline"> • ${escapeHtml(profile.targetWeightMin)}-${escapeHtml(profile.targetWeightMax)} kg</span>`;
+      subtitle.innerHTML = `Recomposición Corporal<span class="hidden min-[430px]:inline"> • ${escapeHtml(profile.targetWeightMin)}-${escapeHtml(profile.targetWeightMax)} ${escapeHtml(CONFIG.WEIGHT_UNIT)}</span>`;
     }
 
     const gymTime = document.getElementById('headerGymTime');
     if (gymTime) {
       const start = String(profile.gymSchedule || '').split('-')[0].trim();
       gymTime.textContent = start || '18:00';
+    }
+
+    const avatar = document.getElementById('headerAvatar');
+    if (avatar) {
+      avatar.textContent = getInitials(profile.name);
     }
 
     const versionBadge = document.getElementById('headerVersionBadge');
@@ -375,6 +389,10 @@ class App {
         this.updateSyncStatus();
       }
     };
+
+    // Esperar a que el respaldo en IndexedDB termine de restaurar antes del sync inicial.
+    await db.ready;
+    this.updateSyncStatus();
 
     // Sincronización transparente al iniciar.
     runSync('start');

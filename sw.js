@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (offline real, sin CDNs en runtime)
-const CACHE_NAME = 'kinetix-v1.19.1';
+const CACHE_NAME = 'kinetix-v1.20.0';
 const CACHE_PREFIX = 'kinetix-';
 
 const CODE_ASSETS = [
@@ -29,6 +29,8 @@ const CODE_ASSETS = [
   './js/services/db.js',
   './js/services/timer.js',
   './js/services/merge.js',
+  './js/services/overload.js',
+  './js/services/analytics-calc.js',
   './js/modules/workout.js',
   './js/modules/workout-render.js',
   './js/modules/workout-utils.js',
@@ -130,8 +132,13 @@ async function cachedFallback(request) {
 }
 
 async function networkFirst(request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
+
   try {
-    const response = await fetch(request, { cache: 'no-cache' });
+    const response = await fetch(request, { cache: 'no-cache', signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (response && response.ok) {
       const cache = await caches.open(CACHE_NAME);
       await cache.put(request, response.clone());
@@ -144,6 +151,8 @@ async function networkFirst(request) {
   } catch {
     const cached = await cachedFallback(request);
     return cached || Response.error();
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

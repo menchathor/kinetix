@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { assertSyncKey } from "./lib/auth";
 
@@ -63,7 +64,7 @@ export const save = mutation({
   },
 });
 
-// Listar sesiones paginadas por createdAt (más recientes primero).
+// Listar sesiones paginadas por createdAt (más recientes primero, compatible con versiones previas).
 export const list = query({
   args: {
     syncKey: v.string(),
@@ -78,6 +79,22 @@ export const list = query({
       : ctx.db.query("workouts").withIndex("by_createdAt");
 
     return await indexed.order("desc").take(limit);
+  },
+});
+
+// Paginación con cursor nativo de Convex (evita omitir sesiones con mismo createdAt).
+export const listPaginated = query({
+  args: {
+    syncKey: v.string(),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    assertSyncKey(args.syncKey);
+    return await ctx.db
+      .query("workouts")
+      .withIndex("by_createdAt")
+      .order("desc")
+      .paginate(args.paginationOpts);
   },
 });
 

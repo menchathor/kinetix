@@ -2,6 +2,10 @@ import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { assertSyncKey } from "./lib/auth";
 
+function isInBodySource(source?: string): boolean {
+  return String(source || "").toLowerCase().includes("inbody");
+}
+
 // Sincronización masiva de datos locales a la nube.
 // Además de subir, procesa eliminaciones pendientes (tombstones) para que un
 // borrado hecho offline no resucite en el siguiente pull.
@@ -14,6 +18,7 @@ export const bulkSync = mutation({
     deletions: v.optional(v.array(v.object({
       type: v.string(),
       key: v.string(),
+      deletedAt: v.optional(v.number()),
     }))),
   },
   handler: async (ctx, args) => {
@@ -75,10 +80,12 @@ export const bulkSync = mutation({
     if (args.measurements && Array.isArray(args.measurements)) {
       for (const m of args.measurements) {
         if (!m.date) continue;
-        const existing = await ctx.db
+        const candidates = await ctx.db
           .query("measurements")
           .withIndex("by_date", (q) => q.eq("date", m.date))
-          .first();
+          .collect();
+        const targetIsInBody = isInBodySource(m.source);
+        const existing = candidates.find((doc) => isInBodySource(doc.source) === targetIsInBody);
 
         const numOrUndef = (val: any) => (val !== undefined && val !== null && val !== "" && !isNaN(Number(val)) ? Number(val) : undefined);
         const now = Date.now();
@@ -147,23 +154,31 @@ export const bulkSync = mutation({
 
     if (args.deletions && Array.isArray(args.deletions)) {
       for (const deletion of args.deletions) {
+        const deletedAt = Number(deletion.deletedAt) || 0;
         if (deletion.type === "workouts") {
           const existing = await ctx.db
             .query("workouts")
             .withIndex("by_sessionId", (q) => q.eq("sessionId", deletion.key))
             .first();
-          if (existing) {
+          const existingVersion = existing ? (existing.updatedAt || existing.createdAt || 0) : 0;
+          if (existing && (!deletedAt || deletedAt >= existingVersion)) {
             await ctx.db.delete(existing._id);
             deletionsApplied++;
           }
         } else if (deletion.type === "measurements") {
-          const existing = await ctx.db
+          const [datePart, category] = deletion.key.split("::");
+          const candidates = await ctx.db
             .query("measurements")
-            .withIndex("by_date", (q) => q.eq("date", deletion.key))
-            .first();
-          if (existing) {
-            await ctx.db.delete(existing._id);
-            deletionsApplied++;
+            .withIndex("by_date", (q) => q.eq("date", datePart))
+            .collect();
+          for (const existing of candidates) {
+            if (category === "inbody" && !isInBodySource(existing.source)) continue;
+            if (category === "home" && isInBodySource(existing.source)) continue;
+            const existingVersion = existing.updatedAt || existing.createdAt || 0;
+            if (!deletedAt || deletedAt >= existingVersion) {
+              await ctx.db.delete(existing._id);
+              deletionsApplied++;
+            }
           }
         }
       }

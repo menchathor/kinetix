@@ -65,6 +65,20 @@ class ConvexService {
     return Boolean(this.syncKey);
   }
 
+  refreshSyncKeyFromStorage() {
+    const stored = this.readSyncKey();
+    if (stored && stored !== this.syncKey) {
+      this.syncKey = stored;
+      this.notifyListeners('key-changed');
+    }
+    return this.hasSyncKey();
+  }
+
+  markSynced(details = null) {
+    this.lastSyncTime = new Date().toISOString();
+    this.notifyListeners('synced', details);
+  }
+
   onSyncStatus(callback) {
     this.syncListeners.push(callback);
     return () => {
@@ -87,7 +101,7 @@ class ConvexService {
       return { success: false, code: 'NO_BACKEND', error: 'Convex URL no configurada.' };
     }
     if (!this.syncKey) {
-      return { success: false, offline: true, code: 'SYNC_KEY_REQUIRED', error: humanError('SYNC_KEY_REQUIRED') };
+      return { success: false, code: 'SYNC_KEY_REQUIRED', error: humanError('SYNC_KEY_REQUIRED') };
     }
     if (!this.isOnline) {
       return { success: false, offline: true, code: 'OFFLINE', error: 'Sin conexión a internet.' };
@@ -127,8 +141,10 @@ class ConvexService {
         return { success: false, code, error: humanError(code, 'La nube rechazó la operación.') };
       }
 
-      this.lastSyncTime = new Date().toISOString();
-      this.notifyListeners('synced', { path });
+      if (endpoint === '/api/mutation') {
+        this.lastSyncTime = new Date().toISOString();
+        this.notifyListeners('synced', { path });
+      }
       return { success: true, data: result.value !== undefined ? result.value : result };
     } catch (err) {
       console.warn(`[Convex] Excepción en ${path}:`, err);
@@ -274,9 +290,42 @@ class ConvexService {
   }
 
   async fetchAllCloudWorkouts(pageSize = 100) {
+    const paginatedAll = [];
+    let cursor = null;
+    let pages = 0;
+    let useLegacy = false;
+
+    while (pages < 50) {
+      pages++;
+      const res = await this.query('workouts:listPaginated', {
+        paginationOpts: { numItems: pageSize, cursor }
+      });
+
+      if (!res.success) {
+        // Si el backend aún no fue redesplegado con listPaginated, usamos list clásico.
+        if (paginatedAll.length === 0 && (res.code === 'CONVEX_ERROR' || res.code === 'HTTP_ERROR')) {
+          useLegacy = true;
+          break;
+        }
+        if (paginatedAll.length === 0) return res;
+        break;
+      }
+
+      const page = Array.isArray(res.data?.page) ? res.data.page : [];
+      paginatedAll.push(...page);
+      if (res.data?.isDone || !res.data?.continueCursor) {
+        return { success: true, data: paginatedAll };
+      }
+      cursor = res.data.continueCursor;
+    }
+
+    if (!useLegacy) {
+      return { success: true, data: paginatedAll };
+    }
+
     const all = [];
     let before;
-    let pages = 0;
+    pages = 0;
 
     while (pages < 50) {
       pages++;

@@ -15,7 +15,10 @@ const MIME = {
   '.webp': 'image/webp',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon'
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.webmanifest': 'application/manifest+json; charset=utf-8'
 };
 
 const server = createServer((req, res) => {

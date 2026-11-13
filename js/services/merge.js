@@ -145,30 +145,53 @@ export function measurementVersion(measurement) {
   return toTimestamp(measurement.date);
 }
 
+export function isInBodyMeasurement(measurement) {
+  return String(measurement?.source || '').toLowerCase().includes('inbody');
+}
+
+export function measurementKey(measurement) {
+  if (!measurement || !measurement.date) return null;
+  const category = isInBodyMeasurement(measurement) ? 'inbody' : 'home';
+  return `${measurement.date}::${category}`;
+}
+
 export function mergeMeasurements(localMeasurements = [], cloudMeasurements = [], tombstones = {}) {
   const map = new Map();
 
   for (const local of localMeasurements) {
     const normalized = normalizeMeasurement(local);
-    if (normalized) map.set(normalized.date, normalized);
+    const key = measurementKey(normalized);
+    if (normalized && key) map.set(key, normalized);
   }
 
   for (const cloud of cloudMeasurements) {
     const normalized = normalizeMeasurement(cloud);
-    if (!normalized) continue;
-    if (isTombstoned(tombstones, 'measurements', normalized.date, measurementVersion(normalized))) continue;
+    const key = measurementKey(normalized);
+    if (!normalized || !key) continue;
 
-    const existing = map.get(normalized.date);
-    if (!existing) {
-      map.set(normalized.date, normalized);
+    const version = measurementVersion(normalized);
+    if (
+      isTombstoned(tombstones, 'measurements', key, version) ||
+      isTombstoned(tombstones, 'measurements', normalized.date, version)
+    ) {
       continue;
     }
-    if (measurementVersion(normalized) > measurementVersion(existing)) {
-      map.set(normalized.date, normalizeMeasurement(normalized, existing));
+
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, normalized);
+      continue;
+    }
+    if (version > measurementVersion(existing)) {
+      map.set(key, normalizeMeasurement(normalized, existing));
     }
   }
 
-  return Array.from(map.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  return Array.from(map.values()).sort((a, b) => {
+    const byDate = (b.date || '').localeCompare(a.date || '');
+    if (byDate !== 0) return byDate;
+    return Number(isInBodyMeasurement(b)) - Number(isInBodyMeasurement(a));
+  });
 }
 
 export function normalizeCustomWeight(value) {

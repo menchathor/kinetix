@@ -1,9 +1,10 @@
 // Módulo de Rutina de Entrenamiento, Guía Visual y Registro en Vivo
 import { INITIAL_DATA } from '../data/initialData.js';
+import { CONFIG } from '../config.js';
 import { state } from '../state.js';
 import { db } from '../services/db.js';
 import { timer } from '../services/timer.js';
-import { escapeHtml } from '../utils/escape.js';
+import { escapeHtml, escapeAttr } from '../utils/escape.js';
 import { showToast, confirmAction } from '../ui/toast.js';
 import { icon } from '../ui/icons.js';
 
@@ -294,6 +295,19 @@ export function renderWorkoutModule(container, preserveScroll = false) {
             </div>
           ` : ''}
 
+          <!-- Nota general de la sesión -->
+          <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-3.5 space-y-1.5 shadow-xs">
+            <label for="inputSessionNote" class="text-[11px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider flex items-center gap-1.5">
+              ${icon('notebook-pen', 'w-3.5 h-3.5 text-amber-500')} Nota general de la sesión
+            </label>
+            <input
+              type="text"
+              id="inputSessionNote"
+              value="${escapeAttr(state.activeWorkout.notes || '')}"
+              placeholder="Ej: Dormí bien, energía alta, ligero ajuste de agarre..."
+              class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[12px] text-[var(--foreground)]" />
+          </div>
+
         </div>
       `}
 
@@ -430,7 +444,7 @@ function attachWorkoutEvents(container, currentDayId) {
 
         renderWorkoutModule(container, true);
         showToast(
-          `Nueva base: ${nextWeight} kg${!isNaN(nextReps) ? ` × ${nextReps} reps` : ''}.`,
+          `Nueva base: ${nextWeight} ${CONFIG.WEIGHT_UNIT}${!isNaN(nextReps) ? ` × ${nextReps} reps` : ''}.`,
           'success'
         );
       }
@@ -446,6 +460,21 @@ function attachWorkoutEvents(container, currentDayId) {
       state.updateSet(exIndex, setIndex, field, input.value, false);
     });
   });
+
+  // Notas rápidas por ejercicio y de sesión (guardado silencioso)
+  container.querySelectorAll('.input-exercise-note').forEach(input => {
+    input.addEventListener('change', () => {
+      const exIndex = parseInt(input.getAttribute('data-ex'));
+      state.updateExerciseNote(exIndex, input.value);
+    });
+  });
+
+  const sessionNoteInput = container.querySelector('#inputSessionNote');
+  if (sessionNoteInput) {
+    sessionNoteInput.addEventListener('change', () => {
+      state.updateSessionNote(sessionNoteInput.value);
+    });
+  }
 
   // Botones +/- de fuerza (ACTUALIZACIÓN DIRECTA EN EL DOM: Cero scroll jump, cero flicker)
   container.querySelectorAll('.btn-step').forEach(btn => {
@@ -480,6 +509,7 @@ function attachWorkoutEvents(container, currentDayId) {
         ex.sets[0].weight = next;
         ex.sets[0].reps = next;
         state.updateSet(exIndex, 0, 'weight', next, false);
+        state.setCardioMinutes(next);
         if (displayEl) displayEl.textContent = `${next} min`;
       }
     });

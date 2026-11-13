@@ -1,5 +1,6 @@
 // Módulo de Configuración, Perfil, Sincronización Convex y Respaldo de Datos
 import { db, formatDisplayDate } from '../services/db.js';
+import { computeProfileStats } from '../services/analytics-calc.js';
 import { convex } from '../services/convex.js';
 import { CONFIG } from '../config.js';
 import { state } from '../state.js';
@@ -19,6 +20,7 @@ export function renderSettingsModule(container) {
   const measurements = db.getMeasurements();
   const stats = computeProfileStats(profile, measurements);
   const exercisesAnalytics = db.getAllExercisesAnalytics();
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
 
   container.innerHTML = `
     <div class="space-y-4 max-w-3xl mx-auto pb-24">
@@ -45,24 +47,24 @@ export function renderSettingsModule(container) {
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Peso actual (última medición):</span>
             <span class="font-bold text-[var(--foreground)]">
-              ${stats.currentWeight > 0 ? `${stats.currentWeight} kg` : 'Sin registro'}
-              ${stats.weightDiff !== null ? `<span class="${stats.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'} font-extrabold text-[11px]">(${stats.weightDiff > 0 ? '+' : ''}${stats.weightDiff} kg)</span>` : ''}
+              ${stats.currentWeight > 0 ? `${stats.currentWeight} ${unit}` : 'Sin registro'}
+              ${stats.weightDiff !== null ? `<span class="${stats.weightDiff <= 0 ? 'text-emerald-400' : 'text-amber-400'} font-extrabold text-[11px]">(${stats.weightDiff > 0 ? '+' : ''}${stats.weightDiff} ${unit})</span>` : ''}
             </span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Masa libre de grasa (magra):</span>
-            <span class="font-bold text-blue-400">${stats.fatFreeMass > 0 ? `${stats.fatFreeMass} kg` : 'Sin registro'}</span>
+            <span class="font-bold text-blue-400">${stats.fatFreeMass > 0 ? `${stats.fatFreeMass} ${unit}` : 'Sin registro'}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Masa muscular esquelética:</span>
-            <span class="font-bold text-blue-400">${stats.skeletalMuscleMass > 0 ? `${stats.skeletalMuscleMass} kg` : 'Sin registro'}</span>
+            <span class="font-bold text-blue-400">${stats.skeletalMuscleMass > 0 ? `${stats.skeletalMuscleMass} ${unit}` : 'Sin registro'}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Grasa corporal / troncal:</span>
             <span class="font-bold text-emerald-400">
               ${stats.bodyFatPercent > 0 ? `${stats.bodyFatPercent}%` : 'Sin registro'}
-              ${stats.fatMassKg > 0 ? `(${stats.fatMassKg} kg)` : ''}
-              ${stats.trunkFat > 0 ? `• Tronco: ${stats.trunkFat} kg` : ''}
+              ${stats.fatMassKg > 0 ? `(${stats.fatMassKg} ${unit})` : ''}
+              ${stats.trunkFat > 0 ? `• Tronco: ${stats.trunkFat} ${unit}` : ''}
             </span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
@@ -75,7 +77,7 @@ export function renderSettingsModule(container) {
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Peso diana sostenible:</span>
-            <span class="font-bold text-emerald-400">${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} kg</span>
+            <span class="font-bold text-emerald-400">${escapeHtml(profile.targetWeightMin)} - ${escapeHtml(profile.targetWeightMax)} ${unit}</span>
           </div>
           <div class="flex justify-between py-1.5 border-b border-[var(--border)]">
             <span class="text-[var(--muted-foreground)]">Horario de gimnasio:</span>
@@ -313,30 +315,6 @@ function profileField(id, label, value, type = 'text', step = null) {
   `;
 }
 
-function computeProfileStats(profile, measurements) {
-  const sorted = [...measurements].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const latestInBody = sorted.find(m => String(m.source || '').toLowerCase().includes('inbody'));
-  const latest = latestInBody || sorted[0] || {};
-
-  const currentWeight = toNumber(latest.weight ?? latest.weightKg ?? profile.currentWeight);
-  const startWeight = toNumber(profile.startWeight) || currentWeight;
-  const weightDiff = startWeight > 0 && currentWeight > 0
-    ? Math.round((currentWeight - startWeight) * 10) / 10
-    : null;
-
-  return {
-    currentWeight,
-    weightDiff,
-    fatFreeMass: toNumber(latest.fatFreeMass ?? profile.fatFreeMass),
-    skeletalMuscleMass: toNumber(latest.muscleMassKg ?? latest.muscleMass ?? profile.skeletalMuscleMass),
-    bodyFatPercent: toNumber(latest.bodyFatPercent ?? latest.fatPercent ?? profile.bodyFatPercent),
-    fatMassKg: toNumber(latest.fatMassKg ?? latest.fatMass ?? profile.fatMassKg),
-    trunkFat: toNumber(latest.trunkFat ?? profile.trunkFat),
-    visceralFat: toNumber(latest.visceralFat ?? profile.visceralFat),
-    bmr: Math.round(toNumber(latest.bmr ?? profile.basalMetabolicRate))
-  };
-}
-
 // Renderiza cada tarjeta de ejercicio con su selector de peso y bitácora
 function renderExercisesAnalyticsList(exercises) {
   if (!exercises || exercises.length === 0) {
@@ -344,11 +322,12 @@ function renderExercisesAnalyticsList(exercises) {
   }
 
   const fallbackImage = './assets/images/smartfit_ill_chest_press.webp';
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
 
   return exercises.map(ex => {
     const stats = ex.stats;
     const progressBadge = stats.progressKg > 0
-      ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">${icon('trending-up', 'w-3.5 h-3.5')} +${stats.progressKg} kg (+${stats.progressPercent}%)</span>`
+      ? `<span class="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">${icon('trending-up', 'w-3.5 h-3.5')} +${stats.progressKg} ${unit} (+${stats.progressPercent}%)</span>`
       : stats.totalSessions > 0
         ? `<span class="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-full border border-blue-500/20">${icon('activity', 'w-3.5 h-3.5')} En ritmo</span>`
         : `<span class="inline-flex items-center gap-1 text-[10px] text-[var(--muted-foreground)] bg-[var(--accent)] px-2 py-0.5 rounded-full">Base inicial</span>`;
@@ -383,9 +362,9 @@ function renderExercisesAnalyticsList(exercises) {
             </div>
 
             <div class="flex items-center gap-3 mt-1.5 text-[10px] text-[var(--muted-foreground)]">
-              <span>Base: <strong class="text-[var(--foreground)]">${stats.baselineWeight > 0 ? stats.baselineWeight + ' kg' : 'Auto'}</strong></span>
+              <span>Base: <strong class="text-[var(--foreground)]">${stats.baselineWeight > 0 ? `${stats.baselineWeight} ${unit}` : 'Auto'}</strong></span>
               <span>•</span>
-              <span>Récord PR: <strong class="text-amber-500">${stats.prWeight > 0 ? stats.prWeight + ' kg' : 'Por marcar'}</strong></span>
+              <span>Récord PR: <strong class="text-amber-500">${stats.prWeight > 0 ? `${stats.prWeight} ${unit}` : 'Por marcar'}</strong></span>
               <span>•</span>
               <span>Sesiones: <strong class="text-[var(--foreground)]">${stats.totalSessions}</strong></span>
             </div>
@@ -401,8 +380,8 @@ function renderExercisesAnalyticsList(exercises) {
                 data-id="${safeId}"
                 data-delta="-2.5"
                 class="btn-adjust-custom-weight w-11 h-11 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
-                title="Bajar 2.5 kg"
-                aria-label="Bajar 2.5 kg a ${escapeAttr(ex.name)}"
+                title="Bajar 2.5 ${unit}"
+                aria-label="Bajar 2.5 ${unit} a ${escapeAttr(ex.name)}"
               >${icon('minus', 'w-4 h-4')}</button>
 
               <div class="relative flex items-center">
@@ -413,9 +392,9 @@ function renderExercisesAnalyticsList(exercises) {
                   data-id="${safeId}"
                   value="${escapeAttr(stats.targetWeight)}"
                   class="input-custom-weight w-20 text-center font-bold text-amber-500 bg-[var(--card)] border border-[var(--border)] rounded-lg text-[13px] outline-none focus:border-amber-500 transition-colors"
-                  aria-label="Peso objetivo en kg para ${escapeAttr(ex.name)}"
+                  aria-label="Peso objetivo en ${unit} para ${escapeAttr(ex.name)}"
                 />
-                <span class="absolute right-1.5 text-[10px] text-[var(--muted-foreground)] pointer-events-none">kg</span>
+                <span class="absolute right-1.5 text-[10px] text-[var(--muted-foreground)] pointer-events-none">${unit}</span>
               </div>
 
               <button
@@ -423,8 +402,8 @@ function renderExercisesAnalyticsList(exercises) {
                 data-id="${safeId}"
                 data-delta="2.5"
                 class="btn-adjust-custom-weight w-11 h-11 rounded-lg bg-[var(--card)] hover:bg-[var(--accent)] border border-[var(--border)] font-bold text-[var(--foreground)] flex items-center justify-center transition-colors active:scale-95"
-                title="Subir 2.5 kg"
-                aria-label="Subir 2.5 kg a ${escapeAttr(ex.name)}"
+                title="Subir 2.5 ${unit}"
+                aria-label="Subir 2.5 ${unit} a ${escapeAttr(ex.name)}"
               >${icon('plus', 'w-4 h-4')}</button>
             </div>
             <span id="savedIndicator_${safeId}" class="text-[10px] font-bold text-emerald-500 opacity-0 transition-opacity inline-flex items-center gap-1">${icon('check', 'w-3.5 h-3.5')} Guardado</span>
@@ -460,6 +439,8 @@ function renderExerciseHistoryAccordion(stats) {
     `;
   }
 
+  const unit = escapeHtml(CONFIG.WEIGHT_UNIT);
+
   return `
     <div class="space-y-1.5">
       <div class="text-[10px] font-semibold text-[var(--muted-foreground)] uppercase tracking-wider px-1">
@@ -472,7 +453,7 @@ function renderExerciseHistoryAccordion(stats) {
           month: 'short'
         }) : 'Sesión';
 
-        const setsSummary = (item.sets || []).map(s => `${s.weight}kg × ${s.reps}`).join(' • ');
+        const setsSummary = (item.sets || []).map(s => `${s.weight}${unit} × ${s.reps}`).join(' • ');
 
         return `
           <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px]">
@@ -483,7 +464,7 @@ function renderExerciseHistoryAccordion(stats) {
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-amber-500 font-mono font-medium break-words">${escapeHtml(setsSummary)}</span>
               <span class="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-500 font-bold text-[10px] border border-amber-500/20">
-                Máx: ${item.bestWeight} kg
+                Máx: ${item.bestWeight} ${unit}
               </span>
             </div>
           </div>
@@ -860,25 +841,18 @@ function attachSettingsEvents(container) {
       btnClearCache.disabled = true;
       btnClearCache.innerHTML = `${icon('loader', 'w-4 h-4 animate-spin')} Actualizando…`;
       try {
-        const filesToRefresh = [
-          './', './index.html', './sw.js', './manifest.json',
-          './assets/css/fonts.css', './assets/css/tailwind.css', './assets/vendor/chart.umd.min.js',
-          './assets/fonts/barlow-400.woff2', './assets/fonts/barlow-500.woff2',
-          './assets/fonts/barlow-600.woff2', './assets/fonts/barlow-700.woff2',
-          './assets/fonts/barlow-condensed-600.woff2', './assets/fonts/barlow-condensed-700.woff2',
-          './js/config.js', './js/app.js', './js/state.js',
-          './js/data/initialData.js', './js/services/convex.js', './js/services/db.js',
-          './js/services/timer.js', './js/services/merge.js',
-          './js/utils/escape.js', './js/ui/toast.js', './js/ui/icons.js',
-          './js/modules/workout.js', './js/modules/workout-render.js', './js/modules/workout-utils.js',
-          './js/modules/nutrition.js',
-          './js/modules/analytics.js', './js/modules/settings.js'
-        ];
-        await Promise.all(filesToRefresh.map(url => fetch(url, { cache: 'reload' }).catch(() => {})));
-
+        const urlsToRefresh = new Set(['./', './index.html', './sw.js', './manifest.json']);
         if ('caches' in window) {
           const keys = await caches.keys();
+          for (const key of keys) {
+            const cache = await caches.open(key);
+            const requests = await cache.keys();
+            requests.forEach((req) => urlsToRefresh.add(req.url));
+          }
+          await Promise.all(Array.from(urlsToRefresh).map((url) => fetch(url, { cache: 'reload' }).catch(() => {})));
           await Promise.all(keys.map(key => caches.delete(key)));
+        } else {
+          await Promise.all(Array.from(urlsToRefresh).map((url) => fetch(url, { cache: 'reload' }).catch(() => {})));
         }
         if ('serviceWorker' in navigator) {
           const regs = await navigator.serviceWorker.getRegistrations();
