@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { timer } from './services/timer.js';
 import { renderWorkoutModule } from './modules/workout.js';
 import { renderNutritionModule } from './modules/nutrition.js';
+import { renderSleepModule } from './modules/sleep.js';
 import { renderAnalyticsModule } from './modules/analytics.js';
 import { renderSettingsModule } from './modules/settings.js';
 import { db } from './services/db.js';
@@ -13,7 +14,7 @@ import { showToast, hasOpenModal, closeTopModal } from './ui/toast.js';
 import { icon } from './ui/icons.js';
 import { escapeHtml } from './utils/escape.js';
 
-const VALID_TABS = ['workout', 'nutrition', 'analytics', 'settings'];
+const VALID_TABS = ['workout', 'nutrition', 'sleep', 'analytics', 'settings'];
 const INSTALL_DISMISS_KEY = 'kinetix_install_dismissed';
 
 // Rellena los huecos `data-icon` del HTML estático con SVG de Lucide.
@@ -215,6 +216,9 @@ class App {
         break;
       case 'nutrition':
         renderNutritionModule(this.container);
+        break;
+      case 'sleep':
+        renderSleepModule(this.container);
         break;
       case 'analytics':
         renderAnalyticsModule(this.container);

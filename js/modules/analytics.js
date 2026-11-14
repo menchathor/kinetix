@@ -3,6 +3,7 @@ import { INITIAL_DATA } from '../data/initialData.js';
 import { CONFIG } from '../config.js';
 import { db, formatDisplayDate } from '../services/db.js';
 import { computeComposition, buildMonthlyWeightSeries, computeSessionVolume, isInBodySource } from '../services/analytics-calc.js';
+import { computeWaistStats } from '../services/wellness-calc.js';
 import { parseBaseWeight } from '../services/overload.js';
 import { escapeHtml, escapeAttr, toNumber } from '../utils/escape.js';
 import { showToast, confirmAction, pushModalHistory } from '../ui/toast.js';
@@ -10,9 +11,11 @@ import { icon } from '../ui/icons.js';
 
 let weightChartInstance = null;
 let exerciseChartInstance = null;
+let waistChartInstance = null;
 let analyticsEscapeHandler = null;
 let analyticsModalHistory = null;
 let sessionModalHistory = null;
+let tapeModalHistory = null;
 let weightChartView = 'bars';
 
 function displayNumber(value, suffix = '') {
@@ -24,12 +27,18 @@ export function renderAnalyticsModule(container) {
     analyticsModalHistory.release();
     analyticsModalHistory = null;
   }
+  if (tapeModalHistory) {
+    tapeModalHistory.release();
+    tapeModalHistory = null;
+  }
   const profile = db.getProfile();
   const measurements = db.getMeasurements();
+  const tapeLogs = db.getTapeMeasurements();
   const workoutLogs = db.getWorkoutLogs();
   const allExercises = db.getAllExercisesAnalytics();
   const composition = computeComposition(measurements, profile);
   const weightSeries = buildMonthlyWeightSeries(measurements);
+  const waistStats = computeWaistStats(tapeLogs, profile.height);
 
   const routinesOrder = [
     { id: 'torso1', label: 'Torso 1 (Lunes)' },
@@ -317,6 +326,7 @@ export function renderAnalyticsModule(container) {
                     ${visceral ? `<span>Visceral: <strong class="${visceral <= 10 ? 'text-emerald-400' : 'text-amber-400'}">Nivel ${escapeHtml(visceral)}</strong></span> •` : ''}
                     ${trunk ? `<span>Tronco: <strong class="text-[var(--foreground)]">${escapeHtml(trunk)} kg</strong></span> •` : ''}
                     ${lean ? `<span>Masa magra: <strong class="text-blue-400">${escapeHtml(lean)} kg</strong></span> •` : ''}
+                    ${m.waistCircumferenceCm ? `<span>Cintura: <strong class="text-emerald-400">${escapeHtml(m.waistCircumferenceCm)} cm</strong></span> •` : ''}
                     ${m.bmr ? `<span>TMB: <strong class="text-[var(--foreground)]">${Math.round(toNumber(m.bmr))} kcal</strong></span>` : ''}
                   </div>
                   ${m.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1 break-words">${escapeHtml(m.notes)}</p>` : ''}
@@ -331,6 +341,123 @@ export function renderAnalyticsModule(container) {
             `;
           }).join('')}
         </div>
+      </div>
+
+      <!-- CINTA MÉTRICA: CINTURA Y PERÍMETROS -->
+      <div class="bg-[var(--card)] rounded-2xl p-4 border border-[var(--border)] shadow-xs space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-9 h-9 rounded-xl bg-teal-500/15 text-teal-400 border border-teal-500/30 flex items-center justify-center shrink-0">
+              ${icon('ruler', 'w-5 h-5')}
+            </span>
+            <div>
+              <h3 class="text-sm font-bold text-[var(--foreground)]">Cinta Métrica • Cintura y Perímetros</h3>
+              <p class="text-[12px] text-[var(--muted-foreground)]">Control semanal en ayunas a la altura del ombligo (meta &lt; ${waistStats.targetWaistCm} cm)</p>
+            </div>
+          </div>
+          <button type="button" id="btnOpenTapeModal" class="btn-touch bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold text-xs px-3 rounded-xl shadow-xs transition-all shrink-0">
+            + Medir cinta
+          </button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Cintura actual</span>
+            <span class="text-base font-extrabold text-[var(--foreground)] block">${waistStats.latest ? `${waistStats.latest.waistCm} cm` : '—'}</span>
+            <span class="text-[10px] font-bold ${waistStats.deltaFromFirst !== null && waistStats.deltaFromFirst <= 0 ? 'text-emerald-500' : 'text-amber-500'}">
+              ${waistStats.deltaFromFirst === null ? 'Sin referencia' : `${waistStats.deltaFromFirst > 0 ? '+' : ''}${waistStats.deltaFromFirst} cm vs inicio`}
+            </span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Cintura / Estatura</span>
+            <span class="text-base font-extrabold ${waistStats.ratioStatus?.tone === 'emerald' ? 'text-emerald-400' : waistStats.ratioStatus?.tone === 'rose' ? 'text-rose-400' : 'text-amber-400'} block">
+              ${waistStats.waistToHeightRatio !== null ? waistStats.waistToHeightRatio.toFixed(2) : '—'}
+            </span>
+            <span class="text-[10px] text-[var(--muted-foreground)]">${waistStats.ratioStatus ? escapeHtml(waistStats.ratioStatus.label) : 'Meta < 0.50'}</span>
+          </div>
+          <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)]">
+            <span class="text-[10px] uppercase font-bold text-[var(--muted-foreground)] block">Último cambio</span>
+            <span class="text-base font-extrabold ${waistStats.deltaFromPrevious !== null && waistStats.deltaFromPrevious <= 0 ? 'text-emerald-400' : 'text-[var(--foreground)]'} block">
+              ${waistStats.deltaFromPrevious === null ? '—' : `${waistStats.deltaFromPrevious > 0 ? '+' : ''}${waistStats.deltaFromPrevious} cm`}
+            </span>
+            <span class="text-[10px] text-[var(--muted-foreground)]">${tapeLogs.length} registros</span>
+          </div>
+        </div>
+
+        ${tapeLogs.length === 0 ? `
+          <div class="p-4 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] text-center text-xs text-[var(--muted-foreground)]">
+            Aún no hay medidas con cinta métrica. Pulsa <b>“+ Medir cinta”</b> para registrar tu cintura inicial (obligatoria) y opcionalmente cadera, pecho, brazo o muslo.
+          </div>
+        ` : `
+          <div class="h-44 relative">
+            <canvas id="chartWaistTrend"></canvas>
+          </div>
+          <details class="group">
+            <summary class="btn-touch cursor-pointer text-[12px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] inline-flex items-center gap-1.5">
+              ${icon('list', 'w-4 h-4')} Ver datos de cinta en tabla
+              <span class="transition-transform group-open:rotate-180">${icon('chevron-down', 'w-4 h-4')}</span>
+            </summary>
+            <div class="mt-2 overflow-x-auto rounded-xl border border-[var(--border)]">
+              <table class="w-full text-[12px] text-left">
+                <caption class="sr-only">Historial de perímetros corporales en centímetros</caption>
+                <thead class="bg-[var(--accent)]/60 text-[var(--muted-foreground)]">
+                  <tr>
+                    <th scope="col" class="px-3 py-2 font-bold">Fecha</th>
+                    <th scope="col" class="px-3 py-2 font-bold">Cintura</th>
+                    <th scope="col" class="px-3 py-2 font-bold">Otros perímetros</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${tapeLogs.map((t) => {
+                    const extras = [
+                      t.abdomenCm ? `Abd ${t.abdomenCm}` : '',
+                      t.hipCm ? `Cad ${t.hipCm}` : '',
+                      t.chestCm ? `Pec ${t.chestCm}` : '',
+                      t.armCm ? `Bra ${t.armCm}` : '',
+                      t.thighCm ? `Mus ${t.thighCm}` : ''
+                    ].filter(Boolean).join(' • ');
+                    return `
+                      <tr class="border-t border-[var(--border)]">
+                        <th scope="row" class="px-3 py-2 font-semibold text-[var(--foreground)]">${escapeHtml(formatDisplayDate(t.date))}</th>
+                        <td class="px-3 py-2 font-mono font-bold">${t.waistCm} cm</td>
+                        <td class="px-3 py-2 font-mono text-[var(--muted-foreground)]">${escapeHtml(extras || '—')}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <div class="space-y-2 pt-1">
+            ${tapeLogs.map((t) => `
+              <div class="p-3 rounded-xl bg-[var(--accent)]/30 border border-[var(--border)] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                <div>
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="font-extrabold text-[var(--foreground)] text-sm font-mono">${t.waistCm} cm cintura</span>
+                    <span class="text-[10px] text-[var(--muted-foreground)] font-mono">${escapeHtml(formatDisplayDate(t.date))}</span>
+                  </div>
+                  <div class="flex items-center gap-2 mt-1 text-[11px] text-[var(--muted-foreground)] flex-wrap">
+                    ${t.abdomenCm ? `<span>Abdomen: <strong class="text-[var(--foreground)]">${t.abdomenCm} cm</strong></span>` : ''}
+                    ${t.hipCm ? `<span>• Cadera: <strong class="text-[var(--foreground)]">${t.hipCm} cm</strong></span>` : ''}
+                    ${t.chestCm ? `<span>• Pecho: <strong class="text-[var(--foreground)]">${t.chestCm} cm</strong></span>` : ''}
+                    ${t.armCm ? `<span>• Brazo: <strong class="text-[var(--foreground)]">${t.armCm} cm</strong></span>` : ''}
+                    ${t.thighCm ? `<span>• Muslo: <strong class="text-[var(--foreground)]">${t.thighCm} cm</strong></span>` : ''}
+                  </div>
+                  ${t.notes ? `<p class="text-[10px] text-[var(--muted-foreground)] italic mt-1 break-words">${escapeHtml(t.notes)}</p>` : ''}
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <button type="button" class="btn-edit-tape btn-touch text-[11px] font-bold text-teal-400 hover:text-teal-300 px-2.5 rounded-lg bg-teal-500/10 border border-teal-500/20 inline-flex items-center gap-1" data-date="${escapeAttr(t.date)}">
+                    ${icon('pen-line', 'w-4 h-4')} Editar
+                  </button>
+                  <button type="button" class="btn-delete-tape w-11 h-11 inline-flex items-center justify-center text-rose-500 hover:text-rose-400 rounded-lg hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20" data-date="${escapeAttr(t.date)}" aria-label="Eliminar cinta del ${escapeAttr(formatDisplayDate(t.date))}">
+                    ${icon('trash-2', 'w-5 h-5')}
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
       </div>
 
       <!-- GRÁFICA 2: SOBRECARGA PROGRESIVA POR EJERCICIO -->
@@ -606,11 +733,78 @@ export function renderAnalyticsModule(container) {
         </div>
       </div>
 
+      <!-- MODAL CINTA MÉTRICA -->
+      <div id="modalTapeMeasurement" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="tapeModalTitle">
+        <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
+          <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+            <div>
+              <h3 id="tapeModalTitle" class="text-base font-bold text-[var(--foreground)]">Medida de Cinta Métrica</h3>
+              <p class="text-[12px] text-[var(--muted-foreground)]">Cintura al ombligo obligatoria; resto opcional</p>
+            </div>
+            <button type="button" id="btnCloseTapeModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-6 h-6')}</button>
+          </div>
+
+          <div class="space-y-3 text-xs max-h-[65vh] overflow-y-auto pr-1">
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="inputTapeDate" class="font-bold text-[var(--foreground)] block mb-1">Fecha *</label>
+                <input type="date" id="inputTapeDate" value="${new Date().toLocaleDateString('en-CA')}" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label for="inputTapeWaist" class="font-bold text-[var(--foreground)] block mb-1">Cintura ombligo (cm) *</label>
+                <input type="number" step="0.1" min="40" max="200" id="inputTapeWaist" placeholder="Ej: 92.5" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label for="inputTapeAbdomen" class="font-bold text-[var(--foreground)] block mb-1">Abdomen bajo (cm)</label>
+                <input type="number" step="0.1" min="40" max="200" id="inputTapeAbdomen" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label for="inputTapeHip" class="font-bold text-[var(--foreground)] block mb-1">Cadera (cm)</label>
+                <input type="number" step="0.1" min="40" max="200" id="inputTapeHip" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label for="inputTapeChest" class="font-bold text-[var(--foreground)] block mb-1">Pecho (cm)</label>
+                <input type="number" step="0.1" min="40" max="200" id="inputTapeChest" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label for="inputTapeArm" class="font-bold text-[var(--foreground)] block mb-1">Brazo (cm)</label>
+                <input type="number" step="0.1" min="15" max="80" id="inputTapeArm" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+              <div>
+                <label for="inputTapeThigh" class="font-bold text-[var(--foreground)] block mb-1">Muslo (cm)</label>
+                <input type="number" step="0.1" min="25" max="120" id="inputTapeThigh" placeholder="Opcional" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+              </div>
+            </div>
+
+            <div>
+              <label for="inputTapeNotes" class="font-bold text-[var(--foreground)] block mb-1">Notas</label>
+              <input type="text" id="inputTapeNotes" placeholder="Ej: Sábado en ayunas, sin apretar cinta" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+            <button type="button" id="btnSaveTapeModal" class="btn-touch flex-1 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl text-[13px] transition-all shadow-xs">
+              Guardar medida
+            </button>
+            <button type="button" id="btnCancelTapeModal" class="btn-touch px-4 rounded-xl border border-[var(--border)] text-[13px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+
     </div>
   `;
 
   attachAnalyticsEvents(container);
   initWeightChart(measurements, profile, weightChartView);
+  initWaistChart(waistStats);
   const initialExId = container.querySelector('#selectExerciseForChart')?.value || 'chest_press';
   initExerciseChart(workoutLogs, initialExId);
 }
@@ -872,6 +1066,98 @@ function attachAnalyticsEvents(container) {
     });
   }
 
+  const closeTapeModal = ({ fromPop = false } = {}) => {
+    const tapeModal = container.querySelector('#modalTapeMeasurement');
+    tapeModal?.classList.add('hidden');
+    const historyEntry = tapeModalHistory;
+    tapeModalHistory = null;
+    historyEntry?.release({ fromPop });
+    container.querySelector('#btnOpenTapeModal')?.focus();
+  };
+
+  const tapeModal = container.querySelector('#modalTapeMeasurement');
+  const btnOpenTape = container.querySelector('#btnOpenTapeModal');
+  const btnCloseTape = container.querySelector('#btnCloseTapeModal');
+  const btnCancelTape = container.querySelector('#btnCancelTapeModal');
+  const btnSaveTape = container.querySelector('#btnSaveTapeModal');
+  const openTapeModal = (existingTape = null) => {
+    if (!tapeModal) return;
+    const setVal = (id, val) => {
+      const el = container.querySelector(id);
+      if (el) el.value = val ?? '';
+    };
+    setVal('#inputTapeDate', existingTape?.date || new Date().toLocaleDateString('en-CA'));
+    setVal('#inputTapeWaist', existingTape?.waistCm);
+    setVal('#inputTapeAbdomen', existingTape?.abdomenCm);
+    setVal('#inputTapeHip', existingTape?.hipCm);
+    setVal('#inputTapeChest', existingTape?.chestCm);
+    setVal('#inputTapeArm', existingTape?.armCm);
+    setVal('#inputTapeThigh', existingTape?.thighCm);
+    setVal('#inputTapeNotes', existingTape?.notes || '');
+    tapeModal.classList.remove('hidden');
+    tapeModalHistory = pushModalHistory(() => closeTapeModal({ fromPop: true }));
+    container.querySelector('#inputTapeWaist')?.focus();
+  };
+
+  btnOpenTape?.addEventListener('click', () => openTapeModal(null));
+  btnCloseTape?.addEventListener('click', closeTapeModal);
+  btnCancelTape?.addEventListener('click', closeTapeModal);
+  tapeModal?.addEventListener('click', (event) => {
+    if (event.target === tapeModal) closeTapeModal();
+  });
+
+  btnSaveTape?.addEventListener('click', () => {
+    const numVal = (id) => {
+      const v = parseFloat(container.querySelector(id)?.value);
+      return Number.isFinite(v) && v > 0 ? v : undefined;
+    };
+    const date = container.querySelector('#inputTapeDate')?.value || new Date().toLocaleDateString('en-CA');
+    const waistCm = numVal('#inputTapeWaist');
+    if (!waistCm) {
+      showToast('La medida de cintura (cm) es obligatoria.', 'warning');
+      container.querySelector('#inputTapeWaist')?.focus();
+      return;
+    }
+
+    db.saveTapeMeasurement({
+      date,
+      waistCm,
+      abdomenCm: numVal('#inputTapeAbdomen'),
+      hipCm: numVal('#inputTapeHip'),
+      chestCm: numVal('#inputTapeChest'),
+      armCm: numVal('#inputTapeArm'),
+      thighCm: numVal('#inputTapeThigh'),
+      notes: container.querySelector('#inputTapeNotes')?.value?.trim() || ''
+    });
+
+    closeTapeModal();
+    showToast('Medida de cinta métrica guardada.', 'success');
+    renderAnalyticsModule(container);
+  });
+
+  container.querySelectorAll('.btn-edit-tape').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const existing = db.getTapeMeasurements().find((item) => item.date === btn.dataset.date);
+      if (existing) openTapeModal(existing);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-tape').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const date = btn.dataset.date;
+      const ok = await confirmAction({
+        title: '¿Eliminar medida de cinta?',
+        message: `Se eliminará la medición de cinta del ${formatDisplayDate(date)} del historial local y la nube.`,
+        confirmText: 'Eliminar',
+        danger: true
+      });
+      if (!ok) return;
+      db.deleteTapeMeasurement(date);
+      showToast('Medida de cinta eliminada.', 'success');
+      renderAnalyticsModule(container);
+    });
+  });
+
   if (analyticsEscapeHandler) {
     document.removeEventListener('keydown', analyticsEscapeHandler);
   }
@@ -879,6 +1165,8 @@ function attachAnalyticsEvents(container) {
     if (event.key !== 'Escape') return;
     if (sessionModal && !sessionModal.classList.contains('hidden')) {
       closeSessionModal();
+    } else if (tapeModal && !tapeModal.classList.contains('hidden')) {
+      closeTapeModal();
     } else if (modal && !modal.classList.contains('hidden')) {
       closeModal();
     }
@@ -924,6 +1212,10 @@ function attachAnalyticsEvents(container) {
         waistCircumferenceCm: waist,
         notes
       });
+
+      if (waist && waist > 0) {
+        db.saveTapeMeasurement({ date: dateVal, waistCm: waist, notes });
+      }
 
       closeModal();
       showToast('Medición guardada.', 'success');
@@ -1002,6 +1294,80 @@ function attachAnalyticsEvents(container) {
       showToast('Medición eliminada.', 'success');
       renderAnalyticsModule(container);
     });
+  });
+}
+
+function initWaistChart(waistStats) {
+  const canvas = document.getElementById('chartWaistTrend');
+  if (!canvas || typeof Chart === 'undefined' || !waistStats?.ascending?.length) return;
+
+  const isDark = document.documentElement.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.08)';
+  const textColor = isDark ? '#94a3b8' : '#475569';
+
+  const labels = waistStats.ascending.map((item) => item.date.slice(5, 10));
+  const data = waistStats.ascending.map((item) => toNumber(item.waistCm));
+  const target = waistStats.targetWaistCm;
+  const allVals = [...data, target];
+  const yMin = Math.max(40, Math.floor(Math.min(...allVals) - 3));
+  const yMax = Math.ceil(Math.max(...allVals) + 3);
+
+  const summary = waistStats.ascending.map((item) => `${item.date}: ${item.waistCm} cm`).join('; ');
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', `Tendencia de cintura en centímetros. ${summary}. Meta menor a ${target} cm.`);
+
+  if (waistChartInstance) waistChartInstance.destroy();
+
+  waistChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Cintura (cm)',
+          data,
+          borderColor: '#14b8a6',
+          backgroundColor: 'rgba(20, 184, 166, 0.14)',
+          borderWidth: 2.5,
+          pointRadius: 4,
+          pointBackgroundColor: '#14b8a6',
+          tension: 0.25,
+          fill: true
+        },
+        {
+          label: `Meta (${target} cm)`,
+          data: labels.map(() => target),
+          borderColor: '#10b981',
+          borderDash: [6, 4],
+          borderWidth: 1.5,
+          pointRadius: 0,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          min: yMin,
+          max: yMax,
+          grid: { color: gridColor },
+          ticks: {
+            color: textColor,
+            font: { size: 11 },
+            callback: (val) => `${val} cm`
+          }
+        },
+        x: {
+          grid: { display: false },
+          ticks: { color: textColor, font: { size: 11 } }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: textColor, font: { size: 10 } } }
+      }
+    }
   });
 }
 

@@ -15,6 +15,8 @@ export const bulkSync = mutation({
     workouts: v.optional(v.array(v.any())),
     measurements: v.optional(v.array(v.any())),
     customWeights: v.optional(v.any()),
+    tapeMeasurements: v.optional(v.array(v.any())),
+    sleepLogs: v.optional(v.array(v.any())),
     deletions: v.optional(v.array(v.object({
       type: v.string(),
       key: v.string(),
@@ -27,6 +29,8 @@ export const bulkSync = mutation({
     let workoutsSynced = 0;
     let measurementsSynced = 0;
     let customWeightsSynced = 0;
+    let tapeSynced = 0;
+    let sleepSynced = 0;
     let deletionsApplied = 0;
 
     if (args.workouts && Array.isArray(args.workouts)) {
@@ -152,6 +156,60 @@ export const bulkSync = mutation({
       }
     }
 
+    if (args.tapeMeasurements && Array.isArray(args.tapeMeasurements)) {
+      const numOrUndef = (val: any) => (val !== undefined && val !== null && val !== "" && !isNaN(Number(val)) ? Number(val) : undefined);
+      for (const t of args.tapeMeasurements) {
+        if (!t?.date || !Number(t.waistCm)) continue;
+        const existing = await ctx.db
+          .query("tape_measurements")
+          .withIndex("by_date", (q) => q.eq("date", t.date))
+          .first();
+        const now = Date.now();
+        const doc = {
+          date: t.date,
+          waistCm: Number(t.waistCm),
+          abdomenCm: numOrUndef(t.abdomenCm),
+          hipCm: numOrUndef(t.hipCm),
+          chestCm: numOrUndef(t.chestCm),
+          armCm: numOrUndef(t.armCm),
+          thighCm: numOrUndef(t.thighCm),
+          notes: t.notes || "",
+          createdAt: t.date ? new Date(t.date).getTime() : now,
+          updatedAt: Number(t.updatedAt) || now,
+        };
+        if (existing) await ctx.db.patch(existing._id, doc);
+        else await ctx.db.insert("tape_measurements", doc);
+        tapeSynced++;
+      }
+    }
+
+    if (args.sleepLogs && Array.isArray(args.sleepLogs)) {
+      const numOrUndef = (val: any) => (val !== undefined && val !== null && val !== "" && !isNaN(Number(val)) ? Number(val) : undefined);
+      for (const s of args.sleepLogs) {
+        if (!s?.date || s.hours === undefined || s.hours === null || isNaN(Number(s.hours))) continue;
+        const existing = await ctx.db
+          .query("sleep_logs")
+          .withIndex("by_date", (q) => q.eq("date", s.date))
+          .first();
+        const now = Date.now();
+        const doc = {
+          date: s.date,
+          hours: Number(s.hours),
+          quality: numOrUndef(s.quality),
+          bedtime: s.bedtime || undefined,
+          wakeTime: s.wakeTime || undefined,
+          wakeups: numOrUndef(s.wakeups),
+          factors: Array.isArray(s.factors) ? s.factors.map(String) : undefined,
+          notes: s.notes || "",
+          createdAt: s.date ? new Date(s.date).getTime() : now,
+          updatedAt: Number(s.updatedAt) || now,
+        };
+        if (existing) await ctx.db.patch(existing._id, doc);
+        else await ctx.db.insert("sleep_logs", doc);
+        sleepSynced++;
+      }
+    }
+
     if (args.deletions && Array.isArray(args.deletions)) {
       for (const deletion of args.deletions) {
         const deletedAt = Number(deletion.deletedAt) || 0;
@@ -180,11 +238,31 @@ export const bulkSync = mutation({
               deletionsApplied++;
             }
           }
+        } else if (deletion.type === "tape") {
+          const existing = await ctx.db
+            .query("tape_measurements")
+            .withIndex("by_date", (q) => q.eq("date", deletion.key))
+            .first();
+          const existingVersion = existing ? (existing.updatedAt || existing.createdAt || 0) : 0;
+          if (existing && (!deletedAt || deletedAt >= existingVersion)) {
+            await ctx.db.delete(existing._id);
+            deletionsApplied++;
+          }
+        } else if (deletion.type === "sleep") {
+          const existing = await ctx.db
+            .query("sleep_logs")
+            .withIndex("by_date", (q) => q.eq("date", deletion.key))
+            .first();
+          const existingVersion = existing ? (existing.updatedAt || existing.createdAt || 0) : 0;
+          if (existing && (!deletedAt || deletedAt >= existingVersion)) {
+            await ctx.db.delete(existing._id);
+            deletionsApplied++;
+          }
         }
       }
     }
 
-    return { success: true, workoutsSynced, measurementsSynced, customWeightsSynced, deletionsApplied };
+    return { success: true, workoutsSynced, measurementsSynced, customWeightsSynced, tapeSynced, sleepSynced, deletionsApplied };
   },
 });
 

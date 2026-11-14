@@ -12,7 +12,9 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as measurements from "../measurements.js";
 import type * as nutrition from "../nutrition.js";
 import type * as profile from "../profile.js";
+import type * as sleep from "../sleep.js";
 import type * as sync from "../sync.js";
+import type * as tape from "../tape.js";
 import type * as workouts from "../workouts.js";
 
 import type {
@@ -26,7 +28,9 @@ declare const fullApi: ApiFromModules<{
   measurements: typeof measurements;
   nutrition: typeof nutrition;
   profile: typeof profile;
+  sleep: typeof sleep;
   sync: typeof sync;
+  tape: typeof tape;
   workouts: typeof workouts;
 }>;
 

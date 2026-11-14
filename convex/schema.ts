@@ -102,4 +102,32 @@ export default defineSchema({
     gymSchedule: v.optional(v.string()),
     updatedAt: v.number(),
   }),
+
+  // Tabla de mediciones de cinta métrica / perímetros corporales
+  tape_measurements: defineTable({
+    date: v.string(), // "YYYY-MM-DD"
+    waistCm: v.number(),
+    abdomenCm: v.optional(v.number()),
+    hipCm: v.optional(v.number()),
+    chestCm: v.optional(v.number()),
+    armCm: v.optional(v.number()),
+    thighCm: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_date", ["date"]),
+
+  // Tabla de registro diario de sueño y recuperación
+  sleep_logs: defineTable({
+    date: v.string(), // "YYYY-MM-DD"
+    hours: v.number(),
+    quality: v.optional(v.number()),
+    bedtime: v.optional(v.string()),
+    wakeTime: v.optional(v.string()),
+    wakeups: v.optional(v.number()),
+    factors: v.optional(v.array(v.string())),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_date", ["date"]),
 });

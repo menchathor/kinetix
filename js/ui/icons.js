@@ -74,7 +74,8 @@ const PATHS = {
   "save": "<path d=\"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z\" />\n  <path d=\"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7\" />\n  <path d=\"M7 3v4a1 1 0 0 0 1 1h7\" />",
   "circle-alert": "<circle cx=\"12\" cy=\"12\" r=\"10\" />\n  <line x1=\"12\" x2=\"12\" y1=\"8\" y2=\"12\" />\n  <line x1=\"12\" x2=\"12.01\" y1=\"16\" y2=\"16\" />",
   "minimize-2": "<polyline points=\"4 14 10 14 10 20\" />\n  <polyline points=\"20 10 14 10 14 4\" />\n  <line x1=\"14\" x2=\"21\" y1=\"10\" y2=\"3\" />\n  <line x1=\"3\" x2=\"10\" y1=\"21\" y2=\"14\" />",
-  "maximize-2": "<polyline points=\"15 3 21 3 21 9\" />\n  <polyline points=\"9 21 3 21 3 15\" />\n  <line x1=\"21\" x2=\"14\" y1=\"3\" y2=\"10\" />\n  <line x1=\"3\" x2=\"10\" y1=\"21\" y2=\"14\" />"
+  "maximize-2": "<polyline points=\"15 3 21 3 21 9\" />\n  <polyline points=\"9 21 3 21 3 15\" />\n  <line x1=\"21\" x2=\"14\" y1=\"3\" y2=\"10\" />\n  <line x1=\"3\" x2=\"10\" y1=\"21\" y2=\"14\" />",
+  "ruler": "<path d=\"M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.41 2.41 0 0 1 0-3.4l2.6-2.6a2.41 2.41 0 0 1 3.4 0Z\" />\n  <path d=\"m14.5 12.5 2-2\" />\n  <path d=\"m11.5 9.5 2-2\" />\n  <path d=\"m8.5 6.5 2-2\" />\n  <path d=\"m17.5 15.5 2-2\" />"
 };
 
 export function icon(name, className = 'w-5 h-5') {

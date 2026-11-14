@@ -11,7 +11,9 @@ import {
   mergeNutrition,
   isTombstoned,
   pruneTombstones,
-  measurementKey
+  measurementKey,
+  mergeTapeMeasurements,
+  mergeSleepLogs
 } from '../js/services/merge.js';
 
 test('toTimestamp acepta ISO, números y valores inválidos', () => {
@@ -154,4 +156,49 @@ test('mergeMeasurements conserva mediciones hogar e InBody el mismo día y respe
   assert.match(merged[0].source, /InBody/i);
   assert.equal(merged[1].date, '2026-10-19');
   assert.match(merged[1].source, /Báscula hogar/i);
+});
+
+test('mergeTapeMeasurements aplica LWW por fecha y respeta tombstones', () => {
+  const local = [
+    { date: '2026-11-14', waistCm: 92.5, hipCm: 101.0, updatedAt: 2000 }
+  ];
+  const cloud = [
+    { date: '2026-11-14', waistCm: 93.0, updatedAt: 1000 },
+    { date: '2026-11-01', waistCm: 94.0, updatedAt: 1000 },
+    { date: '2026-10-20', waistCm: 95.5, updatedAt: 1500 }
+  ];
+  const merged = mergeTapeMeasurements(local, cloud, {
+    tape: {
+      '2026-11-01': { deletedAt: 2500 }
+    }
+  });
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].date, '2026-11-14');
+  assert.equal(merged[0].waistCm, 92.5);
+  assert.equal(merged[0].hipCm, 101.0);
+  assert.equal(merged[1].date, '2026-10-20');
+});
+
+test('mergeSleepLogs aplica LWW por fecha, preserva factores y respeta tombstones', () => {
+  const local = [
+    { date: '2026-11-13', hours: 4.0, quality: 2, factors: ['stress'], updatedAt: 1500 }
+  ];
+  const cloud = [
+    { date: '2026-11-13', hours: 4.5, quality: 3, bedtime: '01:30', wakeTime: '06:00', factors: ['stress', 'screens'], updatedAt: 3000 },
+    { date: '2026-11-10', hours: 3.5, updatedAt: 1000 },
+    { date: '2026-11-12', hours: 4.0, quality: 2, factors: ['wakeups'], updatedAt: 2000 }
+  ];
+  const merged = mergeSleepLogs(local, cloud, {
+    sleep: {
+      '2026-11-10': { deletedAt: 2500 }
+    }
+  });
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].date, '2026-11-13');
+  assert.equal(merged[0].hours, 4.5);
+  assert.equal(merged[0].bedtime, '01:30');
+  assert.deepEqual(merged[0].factors, ['stress', 'screens']);
+  assert.equal(merged[1].date, '2026-11-12');
 });

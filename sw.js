@@ -1,5 +1,5 @@
 // Service Worker para Kinetix PWA (offline real, sin CDNs en runtime)
-const CACHE_NAME = 'kinetix-v1.20.0';
+const CACHE_NAME = 'kinetix-v1.21.0';
 const CACHE_PREFIX = 'kinetix-';
 
 const CODE_ASSETS = [
@@ -31,10 +31,12 @@ const CODE_ASSETS = [
   './js/services/merge.js',
   './js/services/overload.js',
   './js/services/analytics-calc.js',
+  './js/services/wellness-calc.js',
   './js/modules/workout.js',
   './js/modules/workout-render.js',
   './js/modules/workout-utils.js',
   './js/modules/nutrition.js',
+  './js/modules/sleep.js',
   './js/modules/analytics.js',
   './js/modules/settings.js'
 ];

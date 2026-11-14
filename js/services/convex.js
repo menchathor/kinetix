@@ -273,12 +273,50 @@ class ConvexService {
   }
 
   // Sincronización masiva (incluye eliminaciones pendientes)
-  async syncAllLocalData(workouts, measurements, customWeights = {}, deletions = []) {
+  async syncAllLocalData(workouts, measurements, customWeights = {}, deletions = [], tapeMeasurements = [], sleepLogs = []) {
     return await this.mutation('sync:bulkSync', {
       workouts: workouts || [],
       measurements: measurements || [],
       customWeights: customWeights || {},
+      tapeMeasurements: tapeMeasurements || [],
+      sleepLogs: sleepLogs || [],
       deletions: deletions || []
+    });
+  }
+
+  async syncTapeMeasurement(entry) {
+    if (!entry || !entry.date || !Number(entry.waistCm)) {
+      return { success: false, code: 'INVALID_DATA', error: 'Medición de cintura inválida.' };
+    }
+    const numOrUndef = (val) => (val !== undefined && val !== null && val !== '' && !isNaN(Number(val)) ? Number(val) : undefined);
+    return await this.mutation('tape:save', {
+      date: entry.date,
+      waistCm: Number(entry.waistCm),
+      abdomenCm: numOrUndef(entry.abdomenCm),
+      hipCm: numOrUndef(entry.hipCm),
+      chestCm: numOrUndef(entry.chestCm),
+      armCm: numOrUndef(entry.armCm),
+      thighCm: numOrUndef(entry.thighCm),
+      notes: entry.notes || undefined,
+      updatedAt: Number(entry.updatedAt) || Date.now()
+    });
+  }
+
+  async syncSleepLog(entry) {
+    if (!entry || !entry.date || entry.hours === undefined || isNaN(Number(entry.hours))) {
+      return { success: false, code: 'INVALID_DATA', error: 'Registro de sueño inválido.' };
+    }
+    const numOrUndef = (val) => (val !== undefined && val !== null && val !== '' && !isNaN(Number(val)) ? Number(val) : undefined);
+    return await this.mutation('sleep:save', {
+      date: entry.date,
+      hours: Number(entry.hours),
+      quality: numOrUndef(entry.quality),
+      bedtime: entry.bedtime || undefined,
+      wakeTime: entry.wakeTime || undefined,
+      wakeups: numOrUndef(entry.wakeups),
+      factors: Array.isArray(entry.factors) ? entry.factors : undefined,
+      notes: entry.notes || undefined,
+      updatedAt: Number(entry.updatedAt) || Date.now()
     });
   }
 
@@ -349,6 +387,14 @@ class ConvexService {
 
   async fetchCloudMeasurements() {
     return await this.query('measurements:list', { limit: 500 });
+  }
+
+  async fetchCloudTapeMeasurements() {
+    return await this.query('tape:list', { limit: 500 });
+  }
+
+  async fetchCloudSleepLogs() {
+    return await this.query('sleep:list', { limit: 365 });
   }
 
   async fetchCloudCustomWeights() {

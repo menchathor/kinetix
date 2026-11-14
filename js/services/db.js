@@ -9,9 +9,13 @@ import {
   mergeMeasurements,
   mergeCustomWeights,
   mergeNutrition,
+  mergeTapeMeasurements,
+  mergeSleepLogs,
   normalizeWorkout,
   normalizeMeasurement,
   normalizeCustomWeight,
+  normalizeTapeMeasurement,
+  normalizeSleepLog,
   measurementKey,
   isInBodyMeasurement,
   pruneTombstones,
@@ -26,6 +30,8 @@ const KEYS = {
   ACTIVE_SESSION: 'kinetix_active_session',
   DAILY_NUTRITION: 'kinetix_daily_nutrition',
   MEASUREMENTS: 'kinetix_measurements',
+  TAPE_MEASUREMENTS: 'kinetix_tape_measurements',
+  SLEEP_LOGS: 'kinetix_sleep_logs',
   CUSTOM_WEIGHTS: 'kinetix_custom_weights',
   PROFILE: 'kinetix_profile',
   TOMBSTONES: 'kinetix_tombstones',
@@ -271,6 +277,8 @@ export class StorageService {
       savedAt: Date.now(),
       workouts: readJson(KEYS.WORKOUT_LOGS, []),
       measurements: readJson(KEYS.MEASUREMENTS, []),
+      tapeMeasurements: readJson(KEYS.TAPE_MEASUREMENTS, []),
+      sleepLogs: readJson(KEYS.SLEEP_LOGS, []),
       customWeights: readJson(KEYS.CUSTOM_WEIGHTS, {}),
       settings: readJson(KEYS.SETTINGS, {}),
       profile: readJson(KEYS.PROFILE, null),
@@ -304,6 +312,14 @@ export class StorageService {
     }
     if (!localStorage.getItem(KEYS.MEASUREMENTS) && Array.isArray(snapshot.measurements)) {
       writeJson(KEYS.MEASUREMENTS, snapshot.measurements);
+      restored = true;
+    }
+    if (!localStorage.getItem(KEYS.TAPE_MEASUREMENTS) && Array.isArray(snapshot.tapeMeasurements)) {
+      writeJson(KEYS.TAPE_MEASUREMENTS, snapshot.tapeMeasurements);
+      restored = true;
+    }
+    if (!localStorage.getItem(KEYS.SLEEP_LOGS) && Array.isArray(snapshot.sleepLogs)) {
+      writeJson(KEYS.SLEEP_LOGS, snapshot.sleepLogs);
       restored = true;
     }
     if (!localStorage.getItem(KEYS.CUSTOM_WEIGHTS) && snapshot.customWeights) {
@@ -589,6 +605,77 @@ export class StorageService {
     this.syncInBackground(convex.mutation('measurements:deleteMeasurement', payload));
   }
 
+  // --- CINTA MÉTRICA & SUEÑO (registros diarios por fecha) ---
+  getDateEntries(storageKey, normalizeFn) {
+    const list = readJson(storageKey, []);
+    if (!Array.isArray(list)) return [];
+    return list
+      .map((item) => normalizeFn(item))
+      .filter(Boolean)
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  }
+
+  saveDateEntry(storageKey, tombstoneType, normalizeFn, entry, syncFn) {
+    const list = this.getDateEntries(storageKey, normalizeFn);
+    const normalized = normalizeFn({ ...entry, updatedAt: Date.now() });
+    if (!normalized) return entry;
+
+    this.clearTombstone(tombstoneType, normalized.date);
+    const idx = list.findIndex((item) => item.date === normalized.date);
+    if (idx >= 0) list[idx] = normalizeFn(normalized, list[idx]);
+    else list.unshift(normalized);
+
+    list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    writeJson(storageKey, list);
+    this.scheduleMirror();
+    this.syncInBackground(syncFn(normalized));
+    return normalized;
+  }
+
+  deleteDateEntry(storageKey, tombstoneType, normalizeFn, date, mutationPath) {
+    const list = this.getDateEntries(storageKey, normalizeFn).filter((item) => item.date !== date);
+    writeJson(storageKey, list);
+    if (date) this.addTombstone(tombstoneType, date);
+    this.scheduleMirror();
+    this.syncInBackground(convex.mutation(mutationPath, { date }));
+  }
+
+  getTapeMeasurements() {
+    return this.getDateEntries(KEYS.TAPE_MEASUREMENTS, normalizeTapeMeasurement);
+  }
+
+  saveTapeMeasurement(entry) {
+    return this.saveDateEntry(
+      KEYS.TAPE_MEASUREMENTS,
+      'tape',
+      normalizeTapeMeasurement,
+      entry,
+      (normalized) => convex.syncTapeMeasurement(normalized)
+    );
+  }
+
+  deleteTapeMeasurement(date) {
+    this.deleteDateEntry(KEYS.TAPE_MEASUREMENTS, 'tape', normalizeTapeMeasurement, date, 'tape:deleteTape');
+  }
+
+  getSleepLogs() {
+    return this.getDateEntries(KEYS.SLEEP_LOGS, normalizeSleepLog);
+  }
+
+  saveSleepLog(entry) {
+    return this.saveDateEntry(
+      KEYS.SLEEP_LOGS,
+      'sleep',
+      normalizeSleepLog,
+      entry,
+      (normalized) => convex.syncSleepLog(normalized)
+    );
+  }
+
+  deleteSleepLog(date) {
+    this.deleteDateEntry(KEYS.SLEEP_LOGS, 'sleep', normalizeSleepLog, date, 'sleep:deleteSleep');
+  }
+
   // --- CONFIGURACIÓN ---
   getSettings() {
     return readJson(KEYS.SETTINGS, {});
@@ -655,19 +742,23 @@ export class StorageService {
     const tombstones = this.getTombstones();
     const localWorkouts = this.getWorkoutLogs();
     const localMeas = this.getMeasurements();
+    const localTape = this.getTapeMeasurements();
+    const localSleep = this.getSleepLogs();
     const localCustomWeights = this.getCustomWeightsMeta();
     const localProfile = this.getProfile();
 
     // 1. PULL primero: así una nube vieja nunca pisa cambios locales más nuevos.
-    const [cloudWorkoutsRes, cloudMeasRes, cloudCustomRes, cloudNutritionRes, cloudProfileRes] = await Promise.all([
+    const [cloudWorkoutsRes, cloudMeasRes, cloudCustomRes, cloudNutritionRes, cloudProfileRes, cloudTapeRes, cloudSleepRes] = await Promise.all([
       convex.fetchAllCloudWorkouts(),
       convex.fetchCloudMeasurements(),
       convex.fetchCloudCustomWeights(),
       convex.fetchCloudNutrition(),
-      convex.fetchCloudProfile()
+      convex.fetchCloudProfile(),
+      convex.fetchCloudTapeMeasurements(),
+      convex.fetchCloudSleepLogs()
     ]);
 
-    const authError = [cloudWorkoutsRes, cloudMeasRes, cloudCustomRes, cloudNutritionRes, cloudProfileRes]
+    const authError = [cloudWorkoutsRes, cloudMeasRes, cloudCustomRes, cloudNutritionRes, cloudProfileRes, cloudTapeRes, cloudSleepRes]
       .find((res) => res && !res.success && (res.code === 'SYNC_KEY_INVALID' || res.code === 'SYNC_KEY_NOT_CONFIGURED' || res.code === 'SYNC_KEY_REQUIRED'));
     if (authError) {
       return { success: false, code: authError.code, error: authError.error };
@@ -678,6 +769,8 @@ export class StorageService {
     const cloudCustom = cloudCustomRes.success && cloudCustomRes.data && typeof cloudCustomRes.data === 'object' ? cloudCustomRes.data : null;
     const cloudNutrition = cloudNutritionRes.success && Array.isArray(cloudNutritionRes.data) ? cloudNutritionRes.data : null;
     const cloudProfile = cloudProfileRes.success ? cloudProfileRes.data : null;
+    const cloudTape = cloudTapeRes.success && Array.isArray(cloudTapeRes.data) ? cloudTapeRes.data : null;
+    const cloudSleep = cloudSleepRes.success && Array.isArray(cloudSleepRes.data) ? cloudSleepRes.data : null;
 
     // Si falló una consulta crítica, abortamos para no subir datos incompletos.
     if (!cloudWorkouts || !cloudMeas || !cloudCustom) {
@@ -689,6 +782,8 @@ export class StorageService {
     const localWorkoutIds = new Set(localWorkouts.map((w) => w.id));
     const localMeasKeys = new Set(localMeas.map((m) => measurementKey(m)).filter(Boolean));
     const localWeightIds = new Set(Object.keys(localCustomWeights));
+    const localTapeDates = new Set(localTape.map((t) => t.date).filter(Boolean));
+    const localSleepDates = new Set(localSleep.map((s) => s.date).filter(Boolean));
 
     const importedWorkouts = cloudWorkouts.filter((w) => {
       const id = w.sessionId || w.id;
@@ -699,10 +794,14 @@ export class StorageService {
       return key && !localMeasKeys.has(key);
     }).length;
     const importedWeights = Object.keys(cloudCustom).filter((id) => !localWeightIds.has(id)).length;
+    const importedTape = cloudTape ? cloudTape.filter((t) => t?.date && !localTapeDates.has(t.date)).length : 0;
+    const importedSleep = cloudSleep ? cloudSleep.filter((s) => s?.date && !localSleepDates.has(s.date)).length : 0;
 
     const mergedWorkouts = mergeWorkouts(localWorkouts, cloudWorkouts, tombstones);
     const mergedMeas = mergeMeasurements(localMeas, cloudMeas, tombstones);
     const mergedWeights = mergeCustomWeights(localCustomWeights, cloudCustom);
+    const mergedTape = cloudTape ? mergeTapeMeasurements(localTape, cloudTape, tombstones) : localTape;
+    const mergedSleep = cloudSleep ? mergeSleepLogs(localSleep, cloudSleep, tombstones) : localSleep;
 
     // Si algún registro sobrevivió por tener una versión más nueva que su tombstone,
     // retiramos ese tombstone superado para no enviarlo de nuevo.
@@ -721,6 +820,15 @@ export class StorageService {
         const deletedAt = typeof entry === 'object' ? toTimestamp(entry.deletedAt) : toTimestamp(entry);
         if (entry && measVer > deletedAt) {
           delete tombstones.measurements[candidateKey];
+        }
+      }
+    }
+    for (const [list, tType] of [[mergedTape, 'tape'], [mergedSleep, 'sleep']]) {
+      for (const item of list) {
+        const entry = item?.date ? tombstones?.[tType]?.[item.date] : null;
+        const deletedAt = typeof entry === 'object' ? toTimestamp(entry.deletedAt) : toTimestamp(entry);
+        if (entry && toTimestamp(item.updatedAt) > deletedAt) {
+          delete tombstones[tType][item.date];
         }
       }
     }
@@ -753,6 +861,8 @@ export class StorageService {
     writeJson(KEYS.WORKOUT_LOGS, mergedWorkouts);
     writeJson(KEYS.MEASUREMENTS, mergedMeas);
     writeJson(KEYS.CUSTOM_WEIGHTS, mergedWeights);
+    writeJson(KEYS.TAPE_MEASUREMENTS, mergedTape);
+    writeJson(KEYS.SLEEP_LOGS, mergedSleep);
 
     // 6. Push sólo de lo que cambió o no existe en la nube.
     const cloudWorkoutVersions = new Map(cloudWorkouts.map((w) => [w.sessionId || w.id, workoutVersion(w)]));
@@ -774,6 +884,16 @@ export class StorageService {
       if (entry.updatedAt > (cloudWeightVersions.get(id) || 0)) weightsToPush[id] = entry;
     }
 
+    const cloudTapeVersions = new Map((cloudTape || []).map((t) => [t.date, toTimestamp(t.updatedAt) || toTimestamp(t.createdAt)]));
+    const tapeToPush = cloudTape
+      ? mergedTape.filter((t) => t?.date && toTimestamp(t.updatedAt) > (cloudTapeVersions.get(t.date) || 0))
+      : [];
+
+    const cloudSleepVersions = new Map((cloudSleep || []).map((s) => [s.date, toTimestamp(s.updatedAt) || toTimestamp(s.createdAt)]));
+    const sleepToPush = cloudSleep
+      ? mergedSleep.filter((s) => s?.date && toTimestamp(s.updatedAt) > (cloudSleepVersions.get(s.date) || 0))
+      : [];
+
     // 7. Nutrición creada offline: subir los días que la nube no tenga o que
     // sean más antiguos que la versión local.
     let uploadedNutrition = 0;
@@ -794,7 +914,7 @@ export class StorageService {
     const deletions = this.pendingDeletions();
     let pushRes = null;
     try {
-      pushRes = await convex.syncAllLocalData(workoutsToPush, measToPush, weightsToPush, deletions);
+      pushRes = await convex.syncAllLocalData(workoutsToPush, measToPush, weightsToPush, deletions, tapeToPush, sleepToPush);
     } catch (pushErr) {
       console.warn('[DB] Error subiendo a Convex:', pushErr);
     }
@@ -821,6 +941,8 @@ export class StorageService {
       importedWorkouts,
       importedMeas,
       importedWeights,
+      importedTape,
+      importedSleep,
       uploadedNutrition,
       uploadedProfile,
       profileApplied,
@@ -1019,6 +1141,8 @@ export class StorageService {
       customWeights: this.getCustomWeightsMeta(),
       workoutLogs: this.getWorkoutLogs(),
       measurements: this.getMeasurements(),
+      tapeMeasurements: this.getTapeMeasurements(),
+      sleepLogs: this.getSleepLogs(),
       nutrition: this.getAllNutritionLogs(),
       seedVersion: localStorage.getItem(KEYS.SEED_FLAG) || SEED_VERSION
     };
@@ -1044,6 +1168,12 @@ export class StorageService {
     if (data.measurements !== undefined && !Array.isArray(data.measurements)) {
       return { valid: false, error: 'measurements debe ser una lista.' };
     }
+    if (data.tapeMeasurements !== undefined && !Array.isArray(data.tapeMeasurements)) {
+      return { valid: false, error: 'tapeMeasurements debe ser una lista.' };
+    }
+    if (data.sleepLogs !== undefined && !Array.isArray(data.sleepLogs)) {
+      return { valid: false, error: 'sleepLogs debe ser una lista.' };
+    }
     if (data.nutrition !== undefined && !Array.isArray(data.nutrition)) {
       return { valid: false, error: 'nutrition debe ser una lista.' };
     }
@@ -1061,6 +1191,12 @@ export class StorageService {
       }
       if (Array.isArray(data.measurements)) {
         writeJson(KEYS.MEASUREMENTS, data.measurements.map((measurement) => normalizeMeasurement(measurement)).filter(Boolean));
+      }
+      if (Array.isArray(data.tapeMeasurements)) {
+        writeJson(KEYS.TAPE_MEASUREMENTS, data.tapeMeasurements.map((entry) => normalizeTapeMeasurement(entry)).filter(Boolean));
+      }
+      if (Array.isArray(data.sleepLogs)) {
+        writeJson(KEYS.SLEEP_LOGS, data.sleepLogs.map((entry) => normalizeSleepLog(entry)).filter(Boolean));
       }
       if (data.settings && typeof data.settings === 'object') {
         writeJson(KEYS.SETTINGS, { ...this.getSettings(), ...data.settings });

@@ -246,6 +246,108 @@ export function mergeNutrition(localLog, cloudLog) {
   return cloudVersion > localVersion ? cloud : local;
 }
 
+function optionalPositive(value, fallback) {
+  const num = Number(value);
+  if (value !== undefined && value !== null && value !== '' && Number.isFinite(num) && num > 0) {
+    return Math.round(num * 10) / 10;
+  }
+  return fallback;
+}
+
+export function normalizeTapeMeasurement(entry, existing = {}) {
+  if (!entry || !entry.date) return null;
+  const waistCm = optionalPositive(entry.waistCm ?? entry.waistCircumferenceCm ?? entry.waist, existing.waistCm);
+  if (!waistCm || waistCm <= 0) return null;
+
+  const { _id, _creationTime, ...clean } = entry;
+  return {
+    ...existing,
+    ...clean,
+    date: String(entry.date),
+    waistCm,
+    abdomenCm: optionalPositive(entry.abdomenCm, existing.abdomenCm),
+    hipCm: optionalPositive(entry.hipCm, existing.hipCm),
+    chestCm: optionalPositive(entry.chestCm, existing.chestCm),
+    armCm: optionalPositive(entry.armCm, existing.armCm),
+    thighCm: optionalPositive(entry.thighCm, existing.thighCm),
+    notes: entry.notes !== undefined ? String(entry.notes || '') : (existing.notes || ''),
+    updatedAt: measurementVersion(entry) || Date.now()
+  };
+}
+
+export function normalizeSleepLog(entry, existing = {}) {
+  if (!entry || !entry.date) return null;
+  const rawHours = Number(entry.hours);
+  const fallbackHours = Number(existing.hours);
+  const baseHours = Number.isFinite(rawHours) ? rawHours : fallbackHours;
+  if (!Number.isFinite(baseHours) || baseHours < 0 || baseHours > 24) return null;
+
+  const rawQuality = Number(entry.quality ?? existing.quality);
+  const quality = Number.isFinite(rawQuality) && rawQuality >= 1 && rawQuality <= 5
+    ? Math.round(rawQuality)
+    : undefined;
+
+  const rawWakeups = entry.wakeups ?? existing.wakeups;
+  const wakeupsNum = Number(rawWakeups);
+  const wakeups = rawWakeups !== undefined && rawWakeups !== null && rawWakeups !== '' && Number.isFinite(wakeupsNum) && wakeupsNum >= 0
+    ? Math.round(wakeupsNum)
+    : undefined;
+
+  const factors = Array.isArray(entry.factors)
+    ? entry.factors.map((item) => String(item).trim()).filter(Boolean)
+    : (Array.isArray(existing.factors) ? existing.factors : []);
+
+  const { _id, _creationTime, ...clean } = entry;
+  return {
+    ...existing,
+    ...clean,
+    date: String(entry.date),
+    hours: Math.round(baseHours * 10) / 10,
+    quality,
+    bedtime: entry.bedtime !== undefined ? (entry.bedtime || undefined) : existing.bedtime,
+    wakeTime: entry.wakeTime !== undefined ? (entry.wakeTime || undefined) : existing.wakeTime,
+    wakeups,
+    factors,
+    notes: entry.notes !== undefined ? String(entry.notes || '') : (existing.notes || ''),
+    updatedAt: measurementVersion(entry) || Date.now()
+  };
+}
+
+function mergeByDate(localList = [], cloudList = [], tombstones = {}, tombstoneType, normalizeFn) {
+  const map = new Map();
+
+  for (const local of localList) {
+    const normalized = normalizeFn(local);
+    if (normalized) map.set(normalized.date, normalized);
+  }
+
+  for (const cloud of cloudList) {
+    const normalized = normalizeFn(cloud);
+    if (!normalized) continue;
+    const version = measurementVersion(normalized);
+    if (isTombstoned(tombstones, tombstoneType, normalized.date, version)) continue;
+
+    const existing = map.get(normalized.date);
+    if (!existing) {
+      map.set(normalized.date, normalized);
+      continue;
+    }
+    if (version > measurementVersion(existing)) {
+      map.set(normalized.date, normalizeFn(normalized, existing));
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+export function mergeTapeMeasurements(localTape = [], cloudTape = [], tombstones = {}) {
+  return mergeByDate(localTape, cloudTape, tombstones, 'tape', normalizeTapeMeasurement);
+}
+
+export function mergeSleepLogs(localSleep = [], cloudSleep = [], tombstones = {}) {
+  return mergeByDate(localSleep, cloudSleep, tombstones, 'sleep', normalizeSleepLog);
+}
+
 export function pruneTombstones(tombstones = {}, maxAgeMs = 1000 * 60 * 60 * 24 * 90) {
   const cutoff = Date.now() - maxAgeMs;
   const result = {};

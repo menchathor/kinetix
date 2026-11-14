@@ -220,7 +220,7 @@
           <h1 class="text-base font-bold tracking-tight text-[var(--foreground)] flex items-center gap-1.5">
             <span id="appTitleHeader">Kinetix</span>
             <span id="headerGymTime" class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30">18:00</span>
-            <span id="headerVersionBadge" class="hidden min-[390px]:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.20.0</span>
+            <span id="headerVersionBadge" class="hidden min-[390px]:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">v1.21.0</span>
           </h1>
           <p id="headerSubtitle" class="text-[11px] text-[var(--muted-foreground)] truncate">Recomposición Corporal • 72-74 kg</p>
         </div>
@@ -281,7 +281,7 @@
 
   <!-- BOTTOM NAVIGATION BAR (Sticky) -->
   <nav aria-label="Navegación principal" class="fixed bottom-0 left-0 right-0 z-40 bg-[var(--nav-bg)] backdrop-blur-lg border-t border-[var(--border)] safe-bottom transition-colors duration-200">
-    <div class="max-w-md mx-auto grid grid-cols-4 px-2 py-1">
+    <div class="max-w-md mx-auto grid grid-cols-5 px-1 py-1">
 
       <!-- Pestaña 1: Rutina / Entrenamiento -->
       <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-amber-500 transition-all" data-tab="workout">
@@ -295,13 +295,19 @@
         <span class="nav-label text-[11px] mt-1">Nutrición</span>
       </button>
 
-      <!-- Pestaña 3: Evolución -->
+      <!-- Pestaña 3: Sueño -->
+      <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="sleep">
+        <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="moon" aria-hidden="true"></span>
+        <span class="nav-label text-[11px] mt-1">Sueño</span>
+      </button>
+
+      <!-- Pestaña 4: Evolución -->
       <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="analytics">
         <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="chart-line" aria-hidden="true"></span>
         <span class="nav-label text-[11px] mt-1">Evolución</span>
       </button>
 
-      <!-- Pestaña 4: Ajustes -->
+      <!-- Pestaña 5: Ajustes -->
       <button class="nav-tab-btn flex flex-col items-center justify-center min-h-14 py-1 text-[var(--muted-foreground)] transition-all" data-tab="settings">
         <span class="nav-icon w-6 h-6 flex items-center justify-center" data-icon="settings" aria-hidden="true"></span>
         <span class="nav-label text-[11px] mt-1">Ajustes</span>
@@ -311,6 +317,6 @@
   </nav>
 
   <!-- Main JavaScript Module -->
-  <script type="module" src="./js/app.js?v=1.20.0"></script>
+  <script type="module" src="./js/app.js?v=1.21.0"></script>
 </body>
 </html>
