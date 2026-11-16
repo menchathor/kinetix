@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import {
   computeWaistStats,
   computeSleepDurationHours,
-  computeSleepSummary
+  computeSleepSummary,
+  addDaysToDateKey,
+  computePauseDaysCount,
+  findActivePauseForDate,
+  summarizeTrainingPauses
 } from '../js/services/wellness-calc.js';
 
 test('computeWaistStats calcula índice cintura/estatura, meta 0.5 y deltas', () => {
@@ -60,4 +64,38 @@ test('computeSleepSummary clasifica estado insuficiente y óptimo', () => {
   const optimal = computeSleepSummary([{ date: '2026-11-14', hours: 7.5, quality: 5 }], 7.5);
   assert.equal(optimal.status.level, 'optimal');
   assert.equal(optimal.weeklyDebtHours, 0);
+});
+
+test('addDaysToDateKey, computePauseDaysCount y findActivePauseForDate manejan rangos de pausa', () => {
+  assert.equal(addDaysToDateKey('2026-11-16', 6), '2026-11-22');
+  assert.equal(computePauseDaysCount('2026-11-16', '2026-11-22'), 7);
+  assert.equal(computePauseDaysCount('2026-11-16', '2026-11-16'), 1);
+
+  const pauses = [
+    {
+      pauseId: 'p1',
+      startDate: '2026-10-10',
+      endDate: '2026-10-12',
+      reason: 'travel',
+      title: 'Viaje a Osorno donde Francisca',
+      updatedAt: 1000
+    },
+    {
+      pauseId: 'p2',
+      startDate: '2026-11-16',
+      endDate: '2026-11-22',
+      reason: 'illness',
+      title: 'Resfrío con tos y mucosidad',
+      updatedAt: 2000
+    }
+  ];
+
+  const active = findActivePauseForDate(pauses, '2026-11-18');
+  assert.equal(active?.pauseId, 'p2');
+  assert.equal(findActivePauseForDate(pauses, '2026-11-25'), null);
+
+  const summary = summarizeTrainingPauses(pauses, '2026-11-16');
+  assert.equal(summary.total, 2);
+  assert.equal(summary.totalDays, 10);
+  assert.equal(summary.activePause?.reason, 'illness');
 });

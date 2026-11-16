@@ -177,3 +177,94 @@ export function computeSleepSummary(sleepLogs = [], targetHours = SLEEP_TARGET_H
     status
   };
 }
+
+export const PAUSE_REASONS = [
+  {
+    id: 'illness',
+    label: 'Resfrío / Enfermedad',
+    tone: 'rose',
+    defaultTitle: 'Pausa por resfrío y recuperación',
+    guidance: 'Si hay tos, mucosidad o malestar general, parar protege tu sistema inmune y acorta la recaída. Prioriza sueño, líquidos y comer a mantenimiento.'
+  },
+  {
+    id: 'travel',
+    label: 'Viaje familiar',
+    tone: 'sky',
+    defaultTitle: 'Viaje familiar (pausa planificada)',
+    guidance: 'Viajar para compartir con tu familia también suma a tu salud. Mantén caminatas e hidratación y al regresar retoma progresivamente.'
+  },
+  {
+    id: 'recovery',
+    label: 'Descarga / Sueño',
+    tone: 'amber',
+    defaultTitle: 'Pausa por descanso y recuperación',
+    guidance: 'Cuando el sueño cae varios días seguidos, descargar evita elevar el cortisol y frenar la recuperación hormonal.'
+  },
+  {
+    id: 'work',
+    label: 'Trabajo / Agenda',
+    tone: 'indigo',
+    defaultTitle: 'Pausa por carga laboral',
+    guidance: 'No intentes compensar sesiones acumulando fatiga al volver; retoma tu pauta normal con buena técnica.'
+  },
+  {
+    id: 'other',
+    label: 'Otro motivo',
+    tone: 'slate',
+    defaultTitle: 'Pausa de entrenamiento',
+    guidance: 'Dejar registrado el motivo evita la sensación de abandono y mantiene tu historial fiel a tu contexto real.'
+  }
+];
+
+export function getPauseReasonMeta(reasonId) {
+  return PAUSE_REASONS.find((item) => item.id === reasonId) || PAUSE_REASONS[PAUSE_REASONS.length - 1];
+}
+
+export function addDaysToDateKey(dateStr, days = 0) {
+  const match = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(dateStr || '');
+  const d = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + Number(days || 0), 12, 0, 0);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function computePauseDaysCount(startDate, endDate) {
+  const s = String(startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const e = String(endDate || startDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!s || !e) return 1;
+  const startUtc = Date.UTC(Number(s[1]), Number(s[2]) - 1, Number(s[3]));
+  const endUtc = Date.UTC(Number(e[1]), Number(e[2]) - 1, Number(e[3]));
+  const diffDays = Math.round((endUtc - startUtc) / 86400000) + 1;
+  return Math.max(1, diffDays);
+}
+
+export function findActivePauseForDate(pauses = [], dateStr) {
+  if (!dateStr || !Array.isArray(pauses)) return null;
+  const matches = pauses.filter((p) => {
+    if (!p || !p.startDate) return false;
+    const end = p.endDate || p.startDate;
+    return p.startDate <= dateStr && dateStr <= end;
+  });
+  if (matches.length === 0) return null;
+  return [...matches].sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0))[0];
+}
+
+export function summarizeTrainingPauses(pauses = [], referenceDateStr) {
+  const sorted = [...(pauses || [])]
+    .filter((p) => p && p.startDate)
+    .sort((a, b) => {
+      const byStart = (b.startDate || '').localeCompare(a.startDate || '');
+      if (byStart !== 0) return byStart;
+      return (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0);
+    });
+  const totalDays = sorted.reduce((sum, p) => sum + computePauseDaysCount(p.startDate, p.endDate), 0);
+  const activePause = referenceDateStr ? findActivePauseForDate(sorted, referenceDateStr) : null;
+  return {
+    total: sorted.length,
+    totalDays,
+    activePause,
+    list: sorted
+  };
+}

@@ -273,13 +273,22 @@ class ConvexService {
   }
 
   // Sincronización masiva (incluye eliminaciones pendientes)
-  async syncAllLocalData(workouts, measurements, customWeights = {}, deletions = [], tapeMeasurements = [], sleepLogs = []) {
+  async syncAllLocalData(
+    workouts,
+    measurements,
+    customWeights = {},
+    deletions = [],
+    tapeMeasurements = [],
+    sleepLogs = [],
+    trainingPauses = []
+  ) {
     return await this.mutation('sync:bulkSync', {
       workouts: workouts || [],
       measurements: measurements || [],
       customWeights: customWeights || {},
       tapeMeasurements: tapeMeasurements || [],
       sleepLogs: sleepLogs || [],
+      trainingPauses: trainingPauses || [],
       deletions: deletions || []
     });
   }
@@ -315,6 +324,21 @@ class ConvexService {
       wakeTime: entry.wakeTime || undefined,
       wakeups: numOrUndef(entry.wakeups),
       factors: Array.isArray(entry.factors) ? entry.factors : undefined,
+      notes: entry.notes || undefined,
+      updatedAt: Number(entry.updatedAt) || Date.now()
+    });
+  }
+
+  async syncTrainingPause(entry) {
+    if (!entry || !entry.pauseId || !entry.startDate) {
+      return { success: false, code: 'INVALID_DATA', error: 'Pausa sin fecha o identificador.' };
+    }
+    return await this.mutation('pauses:save', {
+      pauseId: String(entry.pauseId),
+      startDate: String(entry.startDate),
+      endDate: String(entry.endDate || entry.startDate),
+      reason: String(entry.reason || 'other'),
+      title: entry.title || undefined,
       notes: entry.notes || undefined,
       updatedAt: Number(entry.updatedAt) || Date.now()
     });
@@ -395,6 +419,10 @@ class ConvexService {
 
   async fetchCloudSleepLogs() {
     return await this.query('sleep:list', { limit: 365 });
+  }
+
+  async fetchCloudTrainingPauses() {
+    return await this.query('pauses:list', { limit: 200 });
   }
 
   async fetchCloudCustomWeights() {

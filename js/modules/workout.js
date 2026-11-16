@@ -2,16 +2,26 @@
 import { INITIAL_DATA } from '../data/initialData.js';
 import { CONFIG } from '../config.js';
 import { state } from '../state.js';
-import { db } from '../services/db.js';
+import { db, todayKey, formatDisplayDate } from '../services/db.js';
 import { timer } from '../services/timer.js';
+import {
+  PAUSE_REASONS,
+  getPauseReasonMeta,
+  addDaysToDateKey,
+  computePauseDaysCount,
+  summarizeTrainingPauses
+} from '../services/wellness-calc.js';
 import { escapeHtml, escapeAttr } from '../utils/escape.js';
-import { showToast, confirmAction } from '../ui/toast.js';
+import { showToast, confirmAction, pushModalHistory } from '../ui/toast.js';
 import { icon } from '../ui/icons.js';
 
 import { renderStaticExerciseCard, renderStaticCardioCard, renderLiveExerciseCard, renderLiveCardioCard, renderCompletedExerciseCard, renderWeeklyScheduleSelector, renderRestDayScreen } from './workout-render.js';
 import { getExerciseDefinition, restSeconds } from './workout-utils.js';
 
 let undoToastRemove = null;
+let pauseModalHistory = null;
+let pauseEscapeHandler = null;
+let showPauseHistory = false;
 
 // El descanso no debe sobrevivir al cierre de la sesión.
 function dismissRestTimer() {
@@ -52,16 +62,135 @@ function computeWeeklyProgress(logs) {
   };
 }
 
-function renderWeeklyProgress(progress) {
+function pauseToneClasses(tone) {
+  if (tone === 'rose') {
+    return {
+      card: 'bg-rose-500/10 border-rose-500/30',
+      icon: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
+      badge: 'text-rose-400'
+    };
+  }
+  if (tone === 'sky') {
+    return {
+      card: 'bg-sky-500/10 border-sky-500/30',
+      icon: 'bg-sky-500/20 text-sky-400 border-sky-500/30',
+      badge: 'text-sky-400'
+    };
+  }
+  if (tone === 'amber') {
+    return {
+      card: 'bg-amber-500/10 border-amber-500/30',
+      icon: 'bg-amber-500/20 text-amber-500 border-amber-500/30',
+      badge: 'text-amber-500'
+    };
+  }
+  if (tone === 'indigo') {
+    return {
+      card: 'bg-indigo-500/10 border-indigo-500/30',
+      icon: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+      badge: 'text-indigo-400'
+    };
+  }
+  return {
+    card: 'bg-[var(--card)] border-[var(--border)]',
+    icon: 'bg-[var(--accent)] text-[var(--muted-foreground)] border-[var(--border)]',
+    badge: 'text-[var(--muted-foreground)]'
+  };
+}
+
+function renderPauseHistoryBlock(pauses = []) {
+  if (!showPauseHistory || pauses.length === 0) return '';
+  return `
+    <div class="mt-3 pt-2.5 border-t border-[var(--border)] space-y-2">
+      <div class="flex items-center justify-between text-[11px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">
+        <span>Pausas registradas (${pauses.length})</span>
+        <span>Contexto del historial</span>
+      </div>
+      <div class="space-y-1.5">
+        ${pauses.slice(0, 6).map((p) => {
+          const meta = getPauseReasonMeta(p.reason);
+          const tone = pauseToneClasses(meta.tone);
+          const days = computePauseDaysCount(p.startDate, p.endDate);
+          const dateLabel = p.startDate === p.endDate
+            ? formatDisplayDate(p.startDate, { day: '2-digit', month: 'short' })
+            : `${formatDisplayDate(p.startDate, { day: '2-digit', month: 'short' })} – ${formatDisplayDate(p.endDate, { day: '2-digit', month: 'short' })}`;
+          return `
+            <div class="p-2.5 rounded-xl bg-[var(--accent)]/50 border border-[var(--border)] flex items-center justify-between gap-2 text-xs">
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="font-bold ${tone.badge}">${escapeHtml(p.title || meta.label)}</span>
+                  <span class="text-[10px] font-mono text-[var(--muted-foreground)]">${escapeHtml(dateLabel)} (${days} ${days === 1 ? 'día' : 'días'})</span>
+                </div>
+                ${p.notes ? `<p class="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">${escapeHtml(p.notes)}</p>` : ''}
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" class="btn-edit-pause btn-touch px-2 rounded-lg text-[11px] font-bold text-amber-500 hover:bg-amber-500/10" data-pause-id="${escapeAttr(p.pauseId)}">Editar</button>
+                <button type="button" class="btn-delete-pause btn-touch w-9 rounded-lg text-[var(--muted-foreground)] hover:text-rose-500 hover:bg-rose-500/10 inline-flex items-center justify-center" data-pause-id="${escapeAttr(p.pauseId)}" aria-label="Eliminar pausa">${icon('trash-2', 'w-4 h-4')}</button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWeeklyProgress(progress, pauseSummary) {
+  const activePause = pauseSummary?.activePause;
+  const totalPauses = pauseSummary?.total || 0;
   const percent = Math.min(100, Math.round((progress.sessions / progress.target) * 100));
+
+  if (activePause) {
+    const meta = getPauseReasonMeta(activePause.reason);
+    const tone = pauseToneClasses(meta.tone);
+    const days = computePauseDaysCount(activePause.startDate, activePause.endDate);
+    const rangeLabel = activePause.startDate === activePause.endDate
+      ? formatDisplayDate(activePause.startDate, { day: '2-digit', month: 'short' })
+      : `${formatDisplayDate(activePause.startDate, { day: '2-digit', month: 'short' })} – ${formatDisplayDate(activePause.endDate, { day: '2-digit', month: 'short' })}`;
+
+    return `
+      <div class="rounded-2xl p-3.5 border shadow-xs ${tone.card}">
+        <div class="flex items-start justify-between gap-2.5">
+          <div class="flex items-start gap-3 min-w-0">
+            <span class="w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${tone.icon}">
+              ${icon(activePause.reason === 'illness' ? 'heart-pulse' : 'shield', 'w-5 h-5')}
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[11px] uppercase font-extrabold tracking-wider ${tone.badge}">Pausa activa • ${escapeHtml(meta.label)}</span>
+                <span class="text-[11px] font-mono text-[var(--muted-foreground)]">${escapeHtml(rangeLabel)} (${days}d)</span>
+              </div>
+              <p class="text-[13px] font-bold text-[var(--foreground)] mt-0.5">${escapeHtml(activePause.title || meta.defaultTitle)}</p>
+              <p class="text-[12px] text-[var(--muted-foreground)] mt-1 leading-relaxed">${escapeHtml(meta.guidance)}</p>
+              ${activePause.notes ? `<p class="text-[11px] text-[var(--foreground)]/80 mt-1 italic">“${escapeHtml(activePause.notes)}”</p>` : ''}
+            </div>
+          </div>
+          <button type="button" id="btnOpenPauseModal" class="btn-touch shrink-0 px-2.5 rounded-xl bg-[var(--card)]/80 border border-[var(--border)] text-[11px] font-bold text-[var(--foreground)] hover:bg-[var(--accent)] inline-flex items-center gap-1">
+            ${icon('pen-line', 'w-3.5 h-3.5')} Editar
+          </button>
+        </div>
+
+        <div class="mt-2.5 pt-2 border-t border-[var(--border)]/60 flex items-center justify-between gap-2 text-[11px] text-[var(--muted-foreground)]">
+          <span>Sesiones esta semana: <b class="text-[var(--foreground)]">${progress.sessions} de ${progress.target}</b> (sin presión durante la pausa)</span>
+          ${totalPauses > 0 ? `
+            <button type="button" id="btnTogglePauseHistory" class="font-bold text-amber-500 hover:underline shrink-0">
+              ${showPauseHistory ? 'Ocultar historial' : `Historial (${totalPauses})`}
+            </button>
+          ` : ''}
+        </div>
+        ${renderPauseHistoryBlock(pauseSummary.list)}
+      </div>
+    `;
+  }
+
   const status = progress.sessions === 0
-    ? 'Completa tu primera sesión'
+    ? 'Completa tu primera sesión o registra pausa si descansas'
     : progress.sessions >= progress.target
       ? 'Objetivo semanal cumplido'
       : 'Sigue así';
   return `
     <div class="bg-[var(--card)] rounded-2xl p-3 border border-[var(--border)] shadow-xs">
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center justify-between gap-2.5">
         <div class="flex items-center gap-3 min-w-0">
           <span class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-500 border border-emerald-500/25 flex items-center justify-center shrink-0">
             ${icon('calendar', 'w-5 h-5')}
@@ -73,20 +202,137 @@ function renderWeeklyProgress(progress) {
             <p class="text-[12px] text-[var(--muted-foreground)] truncate">${status}</p>
           </div>
         </div>
-        <span class="text-[13px] font-bold text-emerald-500 shrink-0">${percent}%</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" id="btnOpenPauseModal" class="btn-touch px-2.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--border)] border border-[var(--border)] text-[11px] font-bold text-[var(--foreground)] inline-flex items-center gap-1" title="Registrar pausa por enfermedad, viaje o descanso">
+            ${icon('shield', 'w-3.5 h-3.5 text-amber-500')} Pausa
+          </button>
+          <span class="text-[13px] font-bold text-emerald-500">${percent}%</span>
+        </div>
       </div>
       <div class="w-full h-1.5 bg-[var(--accent)] rounded-full overflow-hidden mt-2">
         <div class="h-full bg-emerald-500 rounded-full transition-all" style="width: ${percent}%"></div>
+      </div>
+      ${totalPauses > 0 ? `
+        <div class="mt-2 flex items-center justify-end">
+          <button type="button" id="btnTogglePauseHistory" class="text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-amber-500">
+            ${showPauseHistory ? 'Ocultar historial de pausas' : `Ver pausas anteriores (${totalPauses})`}
+          </button>
+        </div>
+        ${renderPauseHistoryBlock(pauseSummary.list)}
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderPauseModal(pauseSummary, today) {
+  const defaultEnd = addDaysToDateKey(today, 6);
+  const historyRows = (pauseSummary?.list || []).slice(0, 8);
+  return `
+    <div id="modalTrainingPause" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="pauseModalTitle">
+      <div class="bg-[var(--card)] rounded-2xl border border-[var(--border)] p-5 max-w-md w-full space-y-4 shadow-xl my-8">
+        <div class="flex items-center justify-between pb-2 border-b border-[var(--border)]">
+          <div>
+            <h3 id="pauseModalTitle" class="text-base font-bold text-[var(--foreground)]">Registrar pausa / recuperación</h3>
+            <p class="text-[12px] text-[var(--muted-foreground)]">Contexto real de ausencia (enfermedad, viaje o descanso)</p>
+          </div>
+          <button type="button" id="btnClosePauseModal" class="btn-touch w-11 rounded-xl text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--accent)] flex items-center justify-center shrink-0" aria-label="Cerrar">${icon('x', 'w-6 h-6')}</button>
+        </div>
+
+        <form id="formTrainingPause" class="space-y-3 text-xs">
+          <input type="hidden" id="inputPauseId" value="" />
+
+          <div>
+            <span class="font-bold text-[var(--foreground)] block mb-1.5">Motivo de la pausa</span>
+            <div class="flex flex-wrap gap-1.5" role="group" aria-label="Motivo de pausa">
+              ${PAUSE_REASONS.map((r, idx) => `
+                <button type="button" class="pause-reason-btn btn-touch px-2.5 rounded-xl border text-[11px] font-bold transition-colors ${idx === 0 ? 'bg-rose-500/20 text-rose-400 border-rose-500/40' : 'bg-[var(--accent)]/50 text-[var(--muted-foreground)] border-[var(--border)] hover:text-[var(--foreground)]'}" data-reason="${escapeAttr(r.id)}" aria-pressed="${idx === 0}">
+                  ${escapeHtml(r.label)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div>
+            <span class="font-bold text-[var(--foreground)] block mb-1.5">Duración rápida</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" class="pause-duration-btn btn-touch px-2.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[11px] font-semibold hover:border-amber-500/40" data-days="0">Solo hoy</button>
+              <button type="button" class="pause-duration-btn btn-touch px-2.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[11px] font-semibold hover:border-amber-500/40" data-days="2">3 días</button>
+              <button type="button" class="pause-duration-btn btn-touch px-2.5 rounded-lg bg-[var(--accent)] border border-[var(--border)] text-[11px] font-semibold hover:border-amber-500/40" data-days="6">Esta semana (7 días)</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label for="inputPauseStart" class="font-bold text-[var(--foreground)] block mb-1">Desde *</label>
+              <input type="date" id="inputPauseStart" value="${escapeAttr(today)}" required class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+            </div>
+            <div>
+              <label for="inputPauseEnd" class="font-bold text-[var(--foreground)] block mb-1">Hasta *</label>
+              <input type="date" id="inputPauseEnd" value="${escapeAttr(defaultEnd)}" required class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)] font-mono" />
+            </div>
+          </div>
+
+          <div>
+            <label for="inputPauseTitle" class="font-bold text-[var(--foreground)] block mb-1">Descripción breve</label>
+            <input type="text" id="inputPauseTitle" value="${escapeAttr(PAUSE_REASONS[0].defaultTitle)}" placeholder="Ej: Resfrío con tos / Viaje a Osorno donde Francisca" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+          </div>
+
+          <div>
+            <label for="inputPauseNotes" class="font-bold text-[var(--foreground)] block mb-1">Notas (síntomas, regreso gradual, etc.)</label>
+            <input type="text" id="inputPauseNotes" placeholder="Ej: Mucha tos y mucosidad, foco en dormir y líquidos" class="w-full p-2 rounded-xl bg-[var(--accent)] border border-[var(--border)] outline-none text-[var(--foreground)]" />
+          </div>
+
+          <div class="flex gap-2 pt-2 border-t border-[var(--border)]">
+            <button type="submit" class="btn-touch flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-[13px] transition-all shadow-xs inline-flex items-center justify-center gap-1.5">
+              ${icon('save', 'w-4 h-4')} Guardar pausa
+            </button>
+            <button type="button" id="btnCancelPauseModal" class="btn-touch px-4 rounded-xl border border-[var(--border)] text-[13px] text-[var(--muted-foreground)] hover:bg-[var(--accent)]">
+              Cancelar
+            </button>
+          </div>
+        </form>
+
+        ${historyRows.length > 0 ? `
+          <div class="pt-2 border-t border-[var(--border)] space-y-1.5 max-h-40 overflow-y-auto">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-[var(--muted-foreground)] block">Historial reciente</span>
+            ${historyRows.map((p) => {
+              const meta = getPauseReasonMeta(p.reason);
+              return `
+                <div class="p-2 rounded-xl bg-[var(--accent)]/40 border border-[var(--border)] flex items-center justify-between gap-2 text-[11px]">
+                  <div class="min-w-0">
+                    <b class="text-[var(--foreground)] block truncate">${escapeHtml(p.title || meta.label)}</b>
+                    <span class="font-mono text-[var(--muted-foreground)]">${escapeHtml(p.startDate)} → ${escapeHtml(p.endDate)}</span>
+                  </div>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" class="btn-edit-pause px-2 py-1 rounded bg-[var(--card)] border border-[var(--border)] font-bold text-amber-500" data-pause-id="${escapeAttr(p.pauseId)}">Editar</button>
+                    <button type="button" class="btn-delete-pause p-1.5 rounded text-[var(--muted-foreground)] hover:text-rose-500" data-pause-id="${escapeAttr(p.pauseId)}" aria-label="Eliminar pausa">${icon('trash-2', 'w-3.5 h-3.5')}</button>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        ` : ''}
       </div>
     </div>
   `;
 }
 
 export function renderWorkoutModule(container, preserveScroll = false) {
+  if (pauseModalHistory) {
+    pauseModalHistory.release();
+    pauseModalHistory = null;
+  }
+  if (pauseEscapeHandler) {
+    document.removeEventListener('keydown', pauseEscapeHandler);
+    pauseEscapeHandler = null;
+  }
+
   const previousScrollY = window.scrollY;
   const isLive = !!state.activeWorkout;
   const profile = db.getProfile();
+  const today = todayKey();
   const weeklyProgress = computeWeeklyProgress(db.getWorkoutLogs());
+  const pauseSummary = summarizeTrainingPauses(db.getTrainingPauses(), today);
   const daysOfWeek = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
   const todayName = daysOfWeek[new Date().getDay()];
   const currentDayId = isLive ? state.activeWorkout.routineId : state.selectedDay;
@@ -100,11 +346,15 @@ export function renderWorkoutModule(container, preserveScroll = false) {
         <!-- Selector Semanal con indicador HOY -->
         ${renderWeeklyScheduleSelector(currentDayId, todayName)}
 
+        ${renderWeeklyProgress(weeklyProgress, pauseSummary)}
+
         <!-- Pantalla Divertida de Descanso & Regeneración -->
         ${renderRestDayScreen(restDay)}
+
+        ${renderPauseModal(pauseSummary, today)}
       </div>
     `;
-    attachRestDayEvents(container);
+    attachRestDayEvents(container, pauseSummary, today);
     return;
   }
 
@@ -221,7 +471,7 @@ export function renderWorkoutModule(container, preserveScroll = false) {
         </div>
       </div>
 
-      ${!isLive ? renderWeeklyProgress(weeklyProgress) : ''}
+      ${!isLive ? renderWeeklyProgress(weeklyProgress, pauseSummary) : ''}
 
       <!-- ============================================================ -->
       <!-- VISTA MODO PREVIA (NO EN VIVO): Todos los ejercicios en orden -->
@@ -311,11 +561,12 @@ export function renderWorkoutModule(container, preserveScroll = false) {
         </div>
       `}
 
+      ${!isLive ? renderPauseModal(pauseSummary, today) : ''}
     </div>
   `;
 
   // Attach Event Listeners
-  attachWorkoutEvents(container, currentDayId);
+  attachWorkoutEvents(container, currentDayId, pauseSummary, today);
 
   // Si se solicitó preservar scroll, restaurarlo de inmediato
   if (preserveScroll) {
@@ -332,7 +583,8 @@ export function renderWorkoutModule(container, preserveScroll = false) {
 
 // MANEJO DE EVENTOS (ZERO JUMP & ZERO FLICKER)
 // --------------------------------------------------------------------------
-function attachWorkoutEvents(container, currentDayId) {
+function attachWorkoutEvents(container, currentDayId, pauseSummary, today) {
+  attachPauseEvents(container, pauseSummary, today);
   // Cambio de día en tabs (vista previa)
   container.querySelectorAll('.day-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -621,7 +873,8 @@ function attachWorkoutEvents(container, currentDayId) {
 
 // EVENTOS PARA LA PANTALLA DE DESCANSO
 // --------------------------------------------------------------------------
-function attachRestDayEvents(container) {
+function attachRestDayEvents(container, pauseSummary, today) {
+  attachPauseEvents(container, pauseSummary, today);
   // Cambio de día en tabs
   container.querySelectorAll('.day-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -650,4 +903,152 @@ function attachRestDayEvents(container) {
       }
     });
   }
+}
+
+function attachPauseEvents(container, pauseSummary, today) {
+  const modal = container.querySelector('#modalTrainingPause');
+  const form = container.querySelector('#formTrainingPause');
+  const idInput = container.querySelector('#inputPauseId');
+  const startInput = container.querySelector('#inputPauseStart');
+  const endInput = container.querySelector('#inputPauseEnd');
+  const titleInput = container.querySelector('#inputPauseTitle');
+  const notesInput = container.querySelector('#inputPauseNotes');
+  let selectedReason = 'illness';
+
+  const applyReasonUI = (reasonId, overwriteTitle = false) => {
+    selectedReason = reasonId || 'other';
+    const meta = getPauseReasonMeta(selectedReason);
+    container.querySelectorAll('.pause-reason-btn').forEach((btn) => {
+      const active = btn.getAttribute('data-reason') === selectedReason;
+      btn.setAttribute('aria-pressed', String(active));
+      btn.classList.toggle('bg-rose-500/20', active && meta.tone === 'rose');
+      btn.classList.toggle('text-rose-400', active && meta.tone === 'rose');
+      btn.classList.toggle('border-rose-500/40', active && meta.tone === 'rose');
+      btn.classList.toggle('bg-amber-500/20', active && meta.tone !== 'rose');
+      btn.classList.toggle('text-amber-500', active && meta.tone !== 'rose');
+      btn.classList.toggle('border-amber-500/40', active && meta.tone !== 'rose');
+      btn.classList.toggle('bg-[var(--accent)]/50', !active);
+      btn.classList.toggle('text-[var(--muted-foreground)]', !active);
+      btn.classList.toggle('border-[var(--border)]', !active);
+    });
+    if (overwriteTitle && titleInput) {
+      titleInput.value = meta.defaultTitle;
+    }
+  };
+
+  const closePauseModal = (fromHistory = false) => {
+    if (!modal || modal.classList.contains('hidden')) return;
+    modal.classList.add('hidden');
+    if (pauseEscapeHandler) {
+      document.removeEventListener('keydown', pauseEscapeHandler);
+      pauseEscapeHandler = null;
+    }
+    if (pauseModalHistory && !fromHistory) {
+      pauseModalHistory.release();
+    }
+    pauseModalHistory = null;
+  };
+
+  const openPauseModal = (entry = null) => {
+    if (!modal) return;
+    const target = entry || pauseSummary?.activePause || null;
+    if (target) {
+      idInput.value = target.pauseId || '';
+      startInput.value = target.startDate || today;
+      endInput.value = target.endDate || target.startDate || today;
+      applyReasonUI(target.reason || 'illness', false);
+      titleInput.value = target.title || getPauseReasonMeta(target.reason).defaultTitle;
+      notesInput.value = target.notes || '';
+    } else {
+      idInput.value = '';
+      startInput.value = today;
+      endInput.value = addDaysToDateKey(today, 6);
+      applyReasonUI('illness', true);
+      notesInput.value = '';
+    }
+    modal.classList.remove('hidden');
+    pauseModalHistory = pushModalHistory(() => closePauseModal(true));
+    pauseEscapeHandler = (ev) => {
+      if (ev.key === 'Escape') closePauseModal();
+    };
+    document.addEventListener('keydown', pauseEscapeHandler);
+  };
+
+  container.querySelector('#btnOpenPauseModal')?.addEventListener('click', () => openPauseModal());
+  container.querySelector('#btnClosePauseModal')?.addEventListener('click', () => closePauseModal());
+  container.querySelector('#btnCancelPauseModal')?.addEventListener('click', () => closePauseModal());
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closePauseModal();
+  });
+
+  container.querySelector('#btnTogglePauseHistory')?.addEventListener('click', () => {
+    showPauseHistory = !showPauseHistory;
+    renderWorkoutModule(container, true);
+  });
+
+  container.querySelectorAll('.pause-reason-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const nextReason = btn.getAttribute('data-reason');
+      const currentVal = (titleInput?.value || '').trim();
+      const isDefaultTitle = !currentVal || PAUSE_REASONS.some((r) => r.defaultTitle === currentVal);
+      applyReasonUI(nextReason, isDefaultTitle);
+    });
+  });
+
+  container.querySelectorAll('.pause-duration-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const delta = Number(btn.getAttribute('data-days')) || 0;
+      const startVal = startInput?.value || today;
+      if (endInput) endInput.value = addDaysToDateKey(startVal, delta);
+    });
+  });
+
+  container.querySelectorAll('.btn-edit-pause').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const pauseId = btn.getAttribute('data-pause-id');
+      const found = (pauseSummary?.list || []).find((p) => p.pauseId === pauseId);
+      if (found) openPauseModal(found);
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-pause').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const pauseId = btn.getAttribute('data-pause-id');
+      if (!pauseId) return;
+      const ok = await confirmAction({
+        title: '¿Eliminar pausa registrada?',
+        message: 'Se quitará este registro de tu historial local y de la nube.',
+        confirmText: 'Eliminar',
+        danger: true
+      });
+      if (!ok) return;
+      db.deleteTrainingPause(pauseId);
+      closePauseModal();
+      renderWorkoutModule(container, true);
+      showToast('Pausa eliminada.', 'info');
+    });
+  });
+
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const startDate = startInput?.value || today;
+    const rawEnd = endInput?.value || startDate;
+    const endDate = rawEnd < startDate ? startDate : rawEnd;
+    const meta = getPauseReasonMeta(selectedReason);
+    const title = (titleInput?.value || '').trim() || meta.defaultTitle;
+    const notes = (notesInput?.value || '').trim();
+    const pauseId = (idInput?.value || '').trim() || `pause_${Date.now()}`;
+
+    db.saveTrainingPause({
+      pauseId,
+      startDate,
+      endDate,
+      reason: selectedReason,
+      title,
+      notes
+    });
+    closePauseModal();
+    renderWorkoutModule(container, true);
+    showToast('Pausa de entrenamiento guardada. ¡Cuídate mucho!', 'success', 4000);
+  });
 }

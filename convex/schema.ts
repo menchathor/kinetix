@@ -130,4 +130,18 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
   }).index("by_date", ["date"]),
+
+  // Tabla de pausas o ausencias justificadas de entrenamiento (resfríos, viajes, descanso)
+  training_pauses: defineTable({
+    pauseId: v.string(),
+    startDate: v.string(), // "YYYY-MM-DD"
+    endDate: v.string(),   // "YYYY-MM-DD"
+    reason: v.string(),    // "illness" | "travel" | "recovery" | "work" | "other"
+    title: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_pauseId", ["pauseId"])
+    .index("by_startDate", ["startDate"]),
 });

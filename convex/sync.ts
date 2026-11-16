@@ -17,6 +17,7 @@ export const bulkSync = mutation({
     customWeights: v.optional(v.any()),
     tapeMeasurements: v.optional(v.array(v.any())),
     sleepLogs: v.optional(v.array(v.any())),
+    trainingPauses: v.optional(v.array(v.any())),
     deletions: v.optional(v.array(v.object({
       type: v.string(),
       key: v.string(),
@@ -31,6 +32,7 @@ export const bulkSync = mutation({
     let customWeightsSynced = 0;
     let tapeSynced = 0;
     let sleepSynced = 0;
+    let pausesSynced = 0;
     let deletionsApplied = 0;
 
     if (args.workouts && Array.isArray(args.workouts)) {
@@ -210,6 +212,31 @@ export const bulkSync = mutation({
       }
     }
 
+    if (args.trainingPauses && Array.isArray(args.trainingPauses)) {
+      for (const p of args.trainingPauses) {
+        const pauseId = p?.pauseId || p?.id;
+        if (!pauseId || !p?.startDate) continue;
+        const existing = await ctx.db
+          .query("training_pauses")
+          .withIndex("by_pauseId", (q) => q.eq("pauseId", String(pauseId)))
+          .first();
+        const now = Date.now();
+        const doc = {
+          pauseId: String(pauseId),
+          startDate: String(p.startDate),
+          endDate: String(p.endDate || p.startDate),
+          reason: String(p.reason || "other"),
+          title: p.title ? String(p.title) : undefined,
+          notes: p.notes ? String(p.notes) : "",
+          createdAt: Number(p.createdAt) || now,
+          updatedAt: Number(p.updatedAt) || now,
+        };
+        if (existing) await ctx.db.patch(existing._id, doc);
+        else await ctx.db.insert("training_pauses", doc);
+        pausesSynced++;
+      }
+    }
+
     if (args.deletions && Array.isArray(args.deletions)) {
       for (const deletion of args.deletions) {
         const deletedAt = Number(deletion.deletedAt) || 0;
@@ -258,11 +285,21 @@ export const bulkSync = mutation({
             await ctx.db.delete(existing._id);
             deletionsApplied++;
           }
+        } else if (deletion.type === "pauses") {
+          const existing = await ctx.db
+            .query("training_pauses")
+            .withIndex("by_pauseId", (q) => q.eq("pauseId", deletion.key))
+            .first();
+          const existingVersion = existing ? (existing.updatedAt || existing.createdAt || 0) : 0;
+          if (existing && (!deletedAt || deletedAt >= existingVersion)) {
+            await ctx.db.delete(existing._id);
+            deletionsApplied++;
+          }
         }
       }
     }
 
-    return { success: true, workoutsSynced, measurementsSynced, customWeightsSynced, tapeSynced, sleepSynced, deletionsApplied };
+    return { success: true, workoutsSynced, measurementsSynced, customWeightsSynced, tapeSynced, sleepSynced, pausesSynced, deletionsApplied };
   },
 });
 

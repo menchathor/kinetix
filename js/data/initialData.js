@@ -142,7 +142,8 @@ export const INITIAL_DATA = {
           tips: [
             "Hacer SIEMPRE al final de la sesión de fuerza para no agotar el glucógeno antes de las máquinas.",
             "Mantener un paso constante donde puedas hablar sin ahogarte (Zona 2 conversacional).",
-            "A esta intensidad tu cuerpo utiliza directamente los ácidos grasos del tronco como combustible sin elevar el cortisol."
+            "A esta intensidad tu cuerpo utiliza directamente los ácidos grasos del tronco como combustible sin elevar el cortisol.",
+            "Evita pirámides intensas llegando a 155-160 lpm post-pesas: dispara el cortisol, retiene agua y deprime la inmunidad si duermes poco."
           ]
         }
       ]
@@ -365,7 +366,8 @@ export const INITIAL_DATA = {
           seatAdjustment: "Inclinación 8-9%, velocidad 4.8 km/h.",
           tips: [
             "Hacer al final: con el glucógeno bajo tras el pectoral y espalda, atacas directamente la grasa del tronco.",
-            "Respiración nasal controlada a ritmo constante."
+            "Respiración nasal controlada a ritmo constante sin pasar de 125-130 lpm.",
+            "Evita subir a tramos de 160 lpm al final de la rutina: prioriza continuidad suave y recuperación."
           ]
         }
       ]

@@ -13,7 +13,8 @@ import {
   pruneTombstones,
   measurementKey,
   mergeTapeMeasurements,
-  mergeSleepLogs
+  mergeSleepLogs,
+  mergeTrainingPauses
 } from '../js/services/merge.js';
 
 test('toTimestamp acepta ISO, números y valores inválidos', () => {
@@ -201,4 +202,54 @@ test('mergeSleepLogs aplica LWW por fecha, preserva factores y respeta tombstone
   assert.equal(merged[0].bedtime, '01:30');
   assert.deepEqual(merged[0].factors, ['stress', 'screens']);
   assert.equal(merged[1].date, '2026-11-12');
+});
+
+test('mergeTrainingPauses aplica LWW por pauseId y respeta tombstones', () => {
+  const local = [
+    {
+      pauseId: 'p1',
+      startDate: '2026-11-16',
+      endDate: '2026-11-22',
+      reason: 'illness',
+      title: 'Resfrío fuerte',
+      updatedAt: 2000
+    }
+  ];
+  const cloud = [
+    {
+      pauseId: 'p1',
+      startDate: '2026-11-16',
+      endDate: '2026-11-20',
+      reason: 'illness',
+      title: 'Resfrío leve',
+      updatedAt: 1000
+    },
+    {
+      pauseId: 'p_deleted',
+      startDate: '2026-10-05',
+      endDate: '2026-10-08',
+      reason: 'travel',
+      updatedAt: 1000
+    },
+    {
+      pauseId: 'p2',
+      startDate: '2026-10-18',
+      endDate: '2026-10-20',
+      reason: 'travel',
+      title: 'Viaje a Osorno donde Francisca',
+      updatedAt: 1500
+    }
+  ];
+
+  const merged = mergeTrainingPauses(local, cloud, {
+    pauses: {
+      p_deleted: { deletedAt: 2500 }
+    }
+  });
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].pauseId, 'p1');
+  assert.equal(merged[0].endDate, '2026-11-22');
+  assert.equal(merged[0].title, 'Resfrío fuerte');
+  assert.equal(merged[1].pauseId, 'p2');
 });

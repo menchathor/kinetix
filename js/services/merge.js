@@ -348,6 +348,63 @@ export function mergeSleepLogs(localSleep = [], cloudSleep = [], tombstones = {}
   return mergeByDate(localSleep, cloudSleep, tombstones, 'sleep', normalizeSleepLog);
 }
 
+export function normalizeTrainingPause(entry, existing = {}) {
+  if (!entry || !entry.startDate) return null;
+  const startDate = String(entry.startDate);
+  const rawEnd = String(entry.endDate || existing.endDate || startDate);
+  const endDate = rawEnd < startDate ? startDate : rawEnd;
+  const reason = String(entry.reason || existing.reason || 'other').trim() || 'other';
+  const pauseId = String(
+    entry.pauseId || entry.id || existing.pauseId || existing.id || `${startDate}_${reason}`
+  );
+  const { _id, _creationTime, ...clean } = entry;
+
+  return {
+    ...existing,
+    ...clean,
+    id: pauseId,
+    pauseId,
+    startDate,
+    endDate,
+    reason,
+    title: entry.title !== undefined ? String(entry.title || '') : (existing.title || ''),
+    notes: entry.notes !== undefined ? String(entry.notes || '') : (existing.notes || ''),
+    createdAt: Number(entry.createdAt ?? existing.createdAt) || Date.now(),
+    updatedAt: measurementVersion(entry) || toTimestamp(existing.updatedAt) || Date.now()
+  };
+}
+
+export function mergeTrainingPauses(localPauses = [], cloudPauses = [], tombstones = {}) {
+  const map = new Map();
+
+  for (const local of localPauses) {
+    const normalized = normalizeTrainingPause(local);
+    if (normalized) map.set(normalized.pauseId, normalized);
+  }
+
+  for (const cloud of cloudPauses) {
+    const normalized = normalizeTrainingPause(cloud);
+    if (!normalized) continue;
+    const version = measurementVersion(normalized);
+    if (isTombstoned(tombstones, 'pauses', normalized.pauseId, version)) continue;
+
+    const existing = map.get(normalized.pauseId);
+    if (!existing) {
+      map.set(normalized.pauseId, normalized);
+      continue;
+    }
+    if (version > measurementVersion(existing)) {
+      map.set(normalized.pauseId, normalizeTrainingPause(normalized, existing));
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => {
+    const byStart = (b.startDate || '').localeCompare(a.startDate || '');
+    if (byStart !== 0) return byStart;
+    return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
+  });
+}
+
 export function pruneTombstones(tombstones = {}, maxAgeMs = 1000 * 60 * 60 * 24 * 90) {
   const cutoff = Date.now() - maxAgeMs;
   const result = {};

@@ -11,6 +11,7 @@
 import type * as lib_auth from "../lib/auth.js";
 import type * as measurements from "../measurements.js";
 import type * as nutrition from "../nutrition.js";
+import type * as pauses from "../pauses.js";
 import type * as profile from "../profile.js";
 import type * as sleep from "../sleep.js";
 import type * as sync from "../sync.js";
@@ -27,6 +28,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   measurements: typeof measurements;
   nutrition: typeof nutrition;
+  pauses: typeof pauses;
   profile: typeof profile;
   sleep: typeof sleep;
   sync: typeof sync;
